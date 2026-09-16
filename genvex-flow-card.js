@@ -1,4 +1,4 @@
-const CARD_VERSION="0.3.1-dev.35";
+const CARD_VERSION="0.3.1-dev.36";
 class GenvexFlowCard extends HTMLElement{
  setConfig(c){this.config={title:"Ventilation",height:720,aspect_ratio:"16/10",grid_options:{columns:12,rows:8,min_columns:3,min_rows:4},...c};if(!this.shadowRoot)this.attachShadow({mode:"open"});this.render()}
  set hass(h){this._hass=h;if(!this._registryLoading&&!this._registry){this._registryLoading=true;Promise.all([h.callWS({type:"config/entity_registry/list"}),h.callWS({type:"config/device_registry/list"})]).then(([r,d])=>{this._registry=r||[];this._devices=d||[];this._registryLoading=false;this.render()}).catch(()=>{this._registry=[];this._registryLoading=false;this.render()})}this.render()} getCardSize(){return Math.max(5,Math.ceil((+this.config?.height||720)/50))}
@@ -24,9 +24,9 @@ class GenvexFlowCard extends HTMLElement{
 <path class="plant" d="M130 550q-22-72 4-113q25 48 8 113m13 0q-3-58 38-94q4 55-25 94"/><path class="plant" d="M595 550q-16-55 5-90q20 39 7 90m10 0q0-45 30-70q4 42-19 70"/>
 <!-- four physical flows; bypass changes the animated route itself -->
 ${on(d.bypass)?`
-<path class="duct" d="M240 112V230Q240 270 280 270H292V455"/><path class="duct" d="M560 455V410Q560 365 515 365H438V112"/>
-<path class="glow" stroke="${co.o}" d="M240 112V230Q240 270 280 270H292V455"/><path class="dots ${lvl?"":"paused"}" d="M240 112V230Q240 270 280 270H292V455"/>
-<path class="glow" stroke="${co.x}" d="M560 455V410Q560 365 515 365H438V112"/><path class="dots ${lvl?"":"paused"}" d="M560 455V410Q560 365 515 365H438V112"/>
+<path class="duct" d="M240 112V230Q240 270 280 270H292V330Q292 365 270 365H255V410Q255 455 255 455"/><path class="duct" d="M560 455V410Q560 365 515 365H438V305Q438 270 470 270H515Q560 270 560 225V112"/>
+<path class="glow" stroke="${co.o}" d="M240 112V230Q240 270 280 270H292V330Q292 365 270 365H255V410Q255 455 255 455"/><path class="dots ${lvl?"":"paused"}" d="M240 112V230Q240 270 280 270H292V330Q292 365 270 365H255V410Q255 455 255 455"/>
+<path class="glow" stroke="${co.x}" d="M560 455V410Q560 365 515 365H438V305Q438 270 470 270H515Q560 270 560 225V112"/><path class="dots ${lvl?"":"paused"}" d="M560 455V410Q560 365 515 365H438V305Q438 270 470 270H515Q560 270 560 225V112"/>
 `:`
 <path class="duct" d="M240 112V230Q240 270 280 270H365"/><path class="duct" d="M365 365H300Q255 365 255 410V455"/><path class="duct" d="M560 455V410Q560 365 515 365H365"/><path class="duct" d="M365 270H515Q560 270 560 225V112"/>
 <path class="glow" stroke="${co.o}" d="M240 112V230Q240 270 280 270H365"/><path class="dots ${lvl?"":"paused"}" d="M240 112V230Q240 270 280 270H365"/>
