@@ -1,4 +1,4 @@
-const CARD_VERSION="0.3.1-dev.2";
+const CARD_VERSION="0.3.1-dev.3";
 class GenvexFlowCard extends HTMLElement{
  setConfig(c){this.config={title:"Ventilation",height:720,aspect_ratio:"16/10",...c};if(!this.shadowRoot)this.attachShadow({mode:"open"});this.render()}
  set hass(h){this._hass=h;this.render()} getCardSize(){return Math.max(5,Math.ceil((+this.config?.height||720)/50))}
