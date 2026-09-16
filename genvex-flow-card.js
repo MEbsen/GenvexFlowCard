@@ -1,4 +1,4 @@
-const CARD_VERSION="0.3.1-dev.38";
+const CARD_VERSION="0.3.1-dev.39";
 class GenvexFlowCard extends HTMLElement{
  setConfig(c){this.config={title:"Ventilation",height:720,aspect_ratio:"16/10",grid_options:{columns:12,rows:8,min_columns:3,min_rows:4},...c};if(!this.shadowRoot)this.attachShadow({mode:"open"});this.render()}
  set hass(h){this._hass=h;if(!this._registryLoading&&!this._registry){this._registryLoading=true;Promise.all([h.callWS({type:"config/entity_registry/list"}),h.callWS({type:"config/device_registry/list"})]).then(([r,d])=>{this._registry=r||[];this._devices=d||[];this._registryLoading=false;this.render()}).catch(()=>{this._registry=[];this._registryLoading=false;this.render()})}this.render()} getCardSize(){return Math.max(5,Math.ceil((+this.config?.height||720)/50))}
@@ -24,9 +24,9 @@ class GenvexFlowCard extends HTMLElement{
 <path class="plant" d="M130 550q-22-72 4-113q25 48 8 113m13 0q-3-58 38-94q4 55-25 94"/><path class="plant" d="M595 550q-16-55 5-90q20 39 7 90m10 0q0-45 30-70q4 42-19 70"/>
 <!-- four physical flows; bypass changes the animated route itself -->
 ${on(d.bypass)?`
-<path class="duct" d="M240 112V230Q240 270 280 270H292V325Q292 365 252 365H245Q225 365 225 385V455"/><path class="duct" d="M560 455V410Q560 365 515 365H438V310Q438 270 478 270H515Q560 270 560 225V112"/>
-<path class="glow" stroke="${co.o}" d="M240 112V230Q240 270 280 270H292V325Q292 365 252 365H245Q225 365 225 385V455"/><path class="dots ${lvl?"":"paused"}" d="M240 112V230Q240 270 280 270H292V325Q292 365 252 365H245Q225 365 225 385V455"/>
-<path class="glow" stroke="${co.x}" d="M560 455V410Q560 365 515 365H438V310Q438 270 478 270H515Q560 270 560 225V112"/><path class="dots ${lvl?"":"paused"}" d="M560 455V410Q560 365 515 365H438V310Q438 270 478 270H515Q560 270 560 225V112"/>
+<path class="duct" d="M240 112V230Q240 270 280 270H272Q292 270 292 290V325Q292 365 252 365H245Q225 365 225 385V455"/><path class="duct" d="M560 455V410Q560 365 515 365H458Q438 365 438 345V310Q438 270 478 270H515Q560 270 560 225V112"/>
+<path class="glow" stroke="${co.o}" d="M240 112V230Q240 270 280 270H272Q292 270 292 290V325Q292 365 252 365H245Q225 365 225 385V455"/><path class="dots ${lvl?"":"paused"}" d="M240 112V230Q240 270 280 270H272Q292 270 292 290V325Q292 365 252 365H245Q225 365 225 385V455"/>
+<path class="glow" stroke="${co.x}" d="M560 455V410Q560 365 515 365H458Q438 365 438 345V310Q438 270 478 270H515Q560 270 560 225V112"/><path class="dots ${lvl?"":"paused"}" d="M560 455V410Q560 365 515 365H458Q438 365 438 345V310Q438 270 478 270H515Q560 270 560 225V112"/>
 `:`
 <path class="duct" d="M240 112V230Q240 270 280 270H365"/><path class="duct" d="M365 365H300Q225 365 225 410V455"/><path class="duct" d="M560 455V410Q560 365 515 365H365"/><path class="duct" d="M365 270H515Q560 270 560 225V112"/>
 <path class="glow" stroke="${co.o}" d="M240 112V230Q240 270 280 270H365"/><path class="dots ${lvl?"":"paused"}" d="M240 112V230Q240 270 280 270H365"/>
@@ -34,8 +34,8 @@ ${on(d.bypass)?`
 <path class="glow" stroke="${co.x}" d="M560 455V410Q560 365 515 365H365"/><path class="dots ${lvl?"":"paused"}" d="M560 455V410Q560 365 515 365H365"/>
 <path class="glow" stroke="${co.e}" d="M365 270H515Q560 270 560 225V112"/><path class="dots ${lvl?"":"paused"}" d="M365 270H515Q560 270 560 225V112"/>
 `}
-<g data-boostcore style="cursor:${auto.boost?'pointer':'default'}"><circle class="badge boostCore" cx="365" cy="318" r="62" style="stroke:${on(d.boost)?'#ff8a3d':'#75a7cf'}"/><g class="fanRotor ${lvl?"":"paused"} ${on(d.boost)?"fanBoost":""}"><path class="blade" d="M365 307C345 270 373 263 382 287C388 303 376 311 365 318C403 298 417 325 394 338C379 346 371 332 365 320C383 357 353 368 340 345C331 330 348 323 363 318C325 329 318 298 344 289C357 284 362 302 365 315Z"/></g><circle cx="365" cy="318" r="18" fill="#42698a"/><text x="365" y="326" text-anchor="middle" font-size="22" font-weight="700" fill="#fff">${d.level}</text></g>
-<text class="sub" x="435" y="302">Varmegenvinding</text>${on(d.bypass)?`<text x="435" y="352" font-size="13" font-weight="700" fill="#63d8f2">BYPASSED</text>`:""}<text x="435" y="330" font-size="30" font-weight="700" fill="#fff">${this.fmt(calcEff,0)}%</text>
+${on(d.bypass)?`<text x="365" y="238" text-anchor="middle" font-size="14" font-weight="800" letter-spacing="1.2" fill="#63d8f2">BYPASSED</text>`:""}<g data-boostcore style="cursor:${auto.boost?'pointer':'default'}"><circle class="badge boostCore" cx="365" cy="318" r="62" style="stroke:${on(d.boost)?'#ff8a3d':'#75a7cf'}"/><g class="fanRotor ${lvl?"":"paused"} ${on(d.boost)?"fanBoost":""}"><path class="blade" d="M365 307C345 270 373 263 382 287C388 303 376 311 365 318C403 298 417 325 394 338C379 346 371 332 365 320C383 357 353 368 340 345C331 330 348 323 363 318C325 329 318 298 344 289C357 284 362 302 365 315Z"/></g><circle cx="365" cy="318" r="18" fill="#42698a"/><text x="365" y="326" text-anchor="middle" font-size="22" font-weight="700" fill="#fff">${d.level}</text></g>
+<text class="sub" x="435" y="302">Varmegenvinding</text><text x="435" y="330" font-size="30" font-weight="700" fill="#fff">${this.fmt(calcEff,0)}%</text>
 <text class="flowCaption" x="235" y="98" text-anchor="middle">FRISK LUFT UDEFRA</text><text class="label" x="92" y="145">INDSUGNING</text><text class="temp" x="92" y="181" fill="${co.o}">${d.o.toFixed(1)}°</text><text class="flowCaption" x="560" y="98" text-anchor="middle">BRUGT LUFT UD</text><text class="label" x="585" y="145">UDBLÆSNING</text><text class="temp" x="585" y="181" fill="${co.e}">${d.e.toFixed(1)}°</text>
 <text class="label" x="100" y="500">INDBLÆSNING</text><text class="temp" x="100" y="537" fill="${co.s}">${d.s.toFixed(1)}°</text><text class="label" x="505" y="500">UDSUGNING</text><text class="temp" x="505" y="537" fill="${co.x}">${this.fmt(d.x)}°</text>
 </g></svg>
