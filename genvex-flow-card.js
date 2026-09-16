@@ -1,4 +1,4 @@
-const CARD_VERSION="0.3.1-dev.44";
+const CARD_VERSION="1.0.0";
 class GenvexFlowCard extends HTMLElement{
  setConfig(c){this.config={title:"Ventilation",height:720,aspect_ratio:"16/10",grid_options:{columns:12,rows:8,min_columns:3,min_rows:4},...c};if(!this.shadowRoot)this.attachShadow({mode:"open"});this.render()}
  set hass(h){this._hass=h;if(!this._registryLoading&&!this._registry){this._registryLoading=true;Promise.all([h.callWS({type:"config/entity_registry/list"}),h.callWS({type:"config/device_registry/list"})]).then(([r,d])=>{this._registry=r||[];this._devices=d||[];this._registryLoading=false;this.render()}).catch(()=>{this._registry=[];this._registryLoading=false;this.render()})}this.render()} getCardSize(){return Math.max(5,Math.ceil((+this.config?.height||720)/50))}
