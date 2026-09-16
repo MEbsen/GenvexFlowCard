@@ -4,14 +4,14 @@ Responsive animated Home Assistant Lovelace card for visualising a heat-recovery
 
 ## Project status
 
-The project is under active development. Stable code lives on `main`; current work lives on `dev`.
+Version 1.0.0 is the first stable release candidate. Stable code lives on `main`; current work continues on `dev`.
 
 ### Branches
 
 - `main` — stable/release-ready builds used for normal HACS installation.
 - `dev` — development builds and visual iteration.
 
-Development versions use a suffix such as `0.3.1-dev.1`. Stable releases use semantic versions such as `0.3.1`.
+Development versions use a suffix such as `0.3.1-dev.1`. Stable releases use semantic versions such as `1.0.0`.
 
 ## HACS
 
