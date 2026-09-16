@@ -1,4 +1,4 @@
-# Genvex Flow Card
+# Genvex Flow Card\n\n## Preview\n\n![Ventilation Flow Card preview](https://placehold.co/1200x760/061525/83a4c4?text=Ventilation+Flow+Card+preview)\n\n> Preview placeholder. This will be replaced by a current screenshot of the card as the visual implementation matures.
 
 Responsive animated Home Assistant Lovelace card for visualising a heat-recovery ventilation system.
 
