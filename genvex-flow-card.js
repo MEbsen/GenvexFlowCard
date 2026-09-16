@@ -22,13 +22,18 @@ class GenvexFlowCard extends HTMLElement{
 <rect class="window" x="118" y="375" width="110" height="95" rx="4"/><rect class="window" x="505" y="375" width="105" height="95" rx="4"/><rect class="window" x="280" y="205" width="170" height="82" rx="4"/>
 <ellipse class="rug" cx="355" cy="535" rx="105" ry="18"/><path class="sofa" d="M278 494q0-15 15-15h105q15 0 15 15v44H278z"/><path class="sofa" d="M290 470h110v35H290z"/><path class="table" d="M430 512h55v8h-55zm8 8h4v25h-4zm35 0h4v25h-4z"/><path class="shelf" d="M500 482h92v68h-92zm8 12h76v5h-76zm0 18h76v5h-76zm0 18h76v5h-76z"/><rect class="picture" x="112" y="348" width="62" height="42"/><rect class="picture" x="185" y="350" width="38" height="55"/><circle class="lampGlow" cx="248" cy="420" r="46"/><path class="lamp" d="M244 375h8v80h-8zm-22 0h52l-12-28h-28z"/>
 <path class="plant" d="M130 550q-22-72 4-113q25 48 8 113m13 0q-3-58 38-94q4 55-25 94"/><path class="plant" d="M595 550q-16-55 5-90q20 39 7 90m10 0q0-45 30-70q4 42-19 70"/>
-<!-- four physical flows -->
+<!-- four physical flows; bypass changes the animated route itself -->
+${on(d.bypass)?`
+<path class="duct" d="M240 112V230Q240 270 280 270H322V455"/><path class="duct" d="M560 455V410Q560 365 515 365H408V112"/>
+<path class="glow" stroke="${co.o}" d="M240 112V230Q240 270 280 270H322V455"/><path class="dots ${lvl?"":"paused"}" d="M240 112V230Q240 270 280 270H322V455"/>
+<path class="glow" stroke="${co.x}" d="M560 455V410Q560 365 515 365H408V112"/><path class="dots ${lvl?"":"paused"}" d="M560 455V410Q560 365 515 365H408V112"/>
+`:`
 <path class="duct" d="M240 112V230Q240 270 280 270H365"/><path class="duct" d="M365 365H300Q255 365 255 410V455"/><path class="duct" d="M560 455V410Q560 365 515 365H365"/><path class="duct" d="M365 270H515Q560 270 560 225V112"/>
 <path class="glow" stroke="${co.o}" d="M240 112V230Q240 270 280 270H365"/><path class="dots ${lvl?"":"paused"}" d="M240 112V230Q240 270 280 270H365"/>
 <path class="glow" stroke="${co.s}" d="M365 365H300Q255 365 255 410V455"/><path class="dots ${lvl?"":"paused"}" d="M365 365H300Q255 365 255 410V455"/>
 <path class="glow" stroke="${co.x}" d="M560 455V410Q560 365 515 365H365"/><path class="dots ${lvl?"":"paused"}" d="M560 455V410Q560 365 515 365H365"/>
 <path class="glow" stroke="${co.e}" d="M365 270H515Q560 270 560 225V112"/><path class="dots ${lvl?"":"paused"}" d="M365 270H515Q560 270 560 225V112"/>
-${on(d.bypass)?`<rect class="bypassMask" x="294" y="225" width="142" height="185" rx="18"/><path class="bypassPath" style="color:${co.o}" stroke="${co.o}" d="M322 238 L322 397"/><path class="bypassPath" style="color:${co.x}" stroke="${co.x}" d="M408 397 L408 238"/>`:`<rect class="hx" x="305" y="235" width="120" height="165" rx="14"/><path stroke="${co.o}" stroke-width="7" opacity=".75" d="M322 260L408 375"/><path stroke="${co.x}" stroke-width="7" opacity=".75" d="M408 260L322 375"/>`}
+`}
 <g data-boostcore style="cursor:${auto.boost?'pointer':'default'}"><circle class="badge boostCore" cx="365" cy="318" r="62" style="stroke:${on(d.boost)?'#ff8a3d':'#75a7cf'}"/><g class="fanRotor ${lvl?"":"paused"} ${on(d.boost)?"fanBoost":""}"><path class="blade" d="M365 307C345 270 373 263 382 287C388 303 376 311 365 318C403 298 417 325 394 338C379 346 371 332 365 320C383 357 353 368 340 345C331 330 348 323 363 318C325 329 318 298 344 289C357 284 362 302 365 315Z"/></g><circle cx="365" cy="318" r="18" fill="#42698a"/><text x="365" y="326" text-anchor="middle" font-size="22" font-weight="700" fill="#fff">${d.level}</text></g>
 <text class="sub" x="435" y="302">Varmegenvinding</text><text x="435" y="330" font-size="30" font-weight="700" fill="#fff">${this.fmt(d.eff,0)}%</text>
 <text class="flowCaption" x="235" y="98" text-anchor="middle">FRISK LUFT UDEFRA</text><text class="label" x="92" y="145">INDSUGNING</text><text class="temp" x="92" y="181" fill="${co.o}">${d.o.toFixed(1)}°</text><text class="flowCaption" x="560" y="98" text-anchor="middle">BRUGT LUFT UD</text><text class="label" x="585" y="145">UDBLÆSNING</text><text class="temp" x="585" y="181" fill="${co.e}">${d.e.toFixed(1)}°</text>
