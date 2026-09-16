@@ -1,4 +1,4 @@
-const CARD_VERSION="0.3.1-dev.7";
+const CARD_VERSION="0.3.1-dev.8";
 class GenvexFlowCard extends HTMLElement{
  setConfig(c){this.config={title:"Ventilation",height:720,aspect_ratio:"16/10",...c};if(!this.shadowRoot)this.attachShadow({mode:"open"});this.render()}
  set hass(h){this._hass=h;this.render()} getCardSize(){return Math.max(5,Math.ceil((+this.config?.height||720)/50))}
@@ -28,7 +28,7 @@ class GenvexFlowCard extends HTMLElement{
 <path class="glow" stroke="${co.e}" d="M365 270H515Q560 270 560 225V112"/><path class="dots ${lvl?"":"paused"}" d="M365 270H515Q560 270 560 225V112"/>
 <rect class="hx" x="305" y="235" width="120" height="165" rx="14"/><path stroke="${co.o}" stroke-width="7" opacity=".75" d="M322 260L408 375"/><path stroke="${co.x}" stroke-width="7" opacity=".75" d="M408 260L322 375"/>
 <circle class="badge" cx="365" cy="318" r="62"/><g class="fanRotor ${lvl?"":"paused"}"><path class="blade" d="M365 307C345 270 373 263 382 287C388 303 376 311 365 318C403 298 417 325 394 338C379 346 371 332 365 320C383 357 353 368 340 345C331 330 348 323 363 318C325 329 318 298 344 289C357 284 362 302 365 315Z"/></g><circle cx="365" cy="318" r="18" fill="#42698a"/><text x="365" y="326" text-anchor="middle" font-size="22" font-weight="700" fill="#fff">${d.level}</text>
-<text class="sub" x="435" y="330">Varmegenvinding</text><text x="435" y="362" font-size="30" font-weight="700" fill="#fff">${d.eff.toFixed(0)}%</text>
+<text class="sub" x="435" y="302">Varmegenvinding</text><text x="435" y="330" font-size="30" font-weight="700" fill="#fff">${d.eff.toFixed(0)}%</text>
 <text class="flowCaption" x="235" y="98" text-anchor="middle">FRISK LUFT UDEFRA</text><text class="label" x="125" y="145">INDSUGNING</text><text class="temp" x="125" y="181" fill="${co.o}">${d.o.toFixed(1)}°</text><text class="flowCaption" x="560" y="98" text-anchor="middle">BRUGT LUFT UD</text><text class="label" x="585" y="145">UDBLÆSNING</text><text class="temp" x="585" y="181" fill="${co.e}">${d.e.toFixed(1)}°</text>
 <text class="label" x="100" y="500">INDBLÆSNING</text><text class="temp" x="100" y="537" fill="${co.s}">${d.s.toFixed(1)}°</text><text class="label" x="505" y="500">UDSUGNING</text><text class="temp" x="505" y="537" fill="${co.x}">${d.x.toFixed(1)}°</text>
 </svg>
