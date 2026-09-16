@@ -21,5 +21,5 @@ jobs:
           zip genvex-flow-card.zip genvex-flow-card.js
       - uses: softprops/action-gh-release@v2
         with:
-          files: release/genvex-flow-card.zip
+          files: |\n            release/genvex-flow-card.js\n            release/genvex-flow-card.zip
           generate_release_notes: true
