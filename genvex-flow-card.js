@@ -1,8 +1,9 @@
-const CARD_VERSION="0.3.1-dev.1";
+const CARD_VERSION="0.3.1-dev.2";
 class GenvexFlowCard extends HTMLElement{
  setConfig(c){this.config={title:"Ventilation",height:720,aspect_ratio:"16/10",...c};if(!this.shadowRoot)this.attachShadow({mode:"open"});this.render()}
  set hass(h){this._hass=h;this.render()} getCardSize(){return Math.max(5,Math.ceil((+this.config?.height||720)/50))}
- static getStubConfig(){return{type:"custom:genvex-flow-card",height:720}}
+ static getStubConfig(){return{type:"custom:genvex-flow-card",title:"Ventilation",height:720}}
+ static getConfigElement(){return document.createElement("genvex-flow-card-editor")}
  state(e,f="—"){return e&&this._hass?.states?.[e]?this._hass.states[e].state:f} num(e,f){const n=Number(this.state(e,f));return Number.isFinite(n)?n:Number(f)}
  tempColor(v){let t=Math.max(-10,Math.min(30,+v||0)),s=[[-10,"#168cff"],[7,"#2bbdff"],[15,"#65d6d0"],[19,"#ffad31"],[23,"#ff6558"],[30,"#ff3855"]];for(let i=1;i<s.length;i++)if(t<=s[i][0]){let p=(t-s[i-1][0])/(s[i][0]-s[i-1][0]),a=s[i-1][1].match(/\w\w/g).map(x=>parseInt(x,16)),b=s[i][1].match(/\w\w/g).map(x=>parseInt(x,16));return"#"+a.map((x,j)=>Math.round(x+(b[j]-x)*p).toString(16).padStart(2,"0")).join("")}return s.at(-1)[1]}
  render(){if(!this.config||!this.shadowRoot)return;let d={o:this.num(this.config.outside_temperature,4.2),s:this.num(this.config.supply_temperature,19.8),x:this.num(this.config.extract_temperature,21.3),e:this.num(this.config.exhaust_temperature,7),h:this.num(this.config.humidity,54),eff:this.num(this.config.efficiency,87),filter:this.num(this.config.filter_days_left,143),level:String(this.state(this.config.fan_level,"2")),bypass:this.state(this.config.bypass,"off"),summer:this.state(this.config.summer_mode,"off"),defrost:this.state(this.config.defrost,"off"),reheat:this.state(this.config.reheat,"off")},on=v=>["on","true","open","active","1"].includes(String(v).toLowerCase()),lvl=Math.max(0,Math.min(4,+d.level||0)),speed=lvl===0?0:Math.max(.7,4.8-lvl*.9),co={o:this.tempColor(d.o),s:this.tempColor(d.s),x:this.tempColor(d.x),e:this.tempColor(d.e)};
@@ -33,4 +34,17 @@ class GenvexFlowCard extends HTMLElement{
 <div class="bottom"><div class="metric"><span class="icon">♧</span><small>Luftfugtighed</small><b>${d.h.toFixed(0)}%</b><small>Indendørs</small></div><div class="metric"><span class="icon">⌂</span><small>Temperatur inde</small><b>${d.x.toFixed(1)}°</b><small>Udsugningsluft</small></div><div class="metric"><span class="icon">♢</span><small>Luftkvalitet</small><b>—</b><small>Ikke konfigureret</small></div></div>
 </div></ha-card>`}
 }
-customElements.define("genvex-flow-card",GenvexFlowCard);window.customCards=window.customCards||[];window.customCards.push({type:"genvex-flow-card",name:"Ventilation Flow Card",description:"Animated heat-recovery ventilation visualization",preview:true});console.info("%c VENTILATION-FLOW-CARD %c "+CARD_VERSION,"background:#078ee6;color:white;padding:3px","background:#333;color:white;padding:3px");
+
+class GenvexFlowCardEditor extends HTMLElement{
+ set hass(h){this._hass=h;if(this._rendered)this._syncPickers()}
+ setConfig(c){this._config={title:"Ventilation",height:720,...c};this.render()}
+ _fire(config){this._config=config;this.dispatchEvent(new CustomEvent("config-changed",{detail:{config},bubbles:true,composed:true}))}
+ _change(e){const key=e.target.dataset.key;if(!key)return;let value=e.target.type==="number"?Number(e.target.value):e.target.value;this._fire({...this._config,[key]:value})}
+ _entity(e){const key=e.target.dataset.key;this._fire({...this._config,[key]:e.target.value})}
+ _syncPickers(){this.shadowRoot?.querySelectorAll("ha-entity-picker").forEach(p=>p.hass=this._hass)}
+ render(){if(!this.shadowRoot)this.attachShadow({mode:"open"});const entities=[
+ ["outside_temperature","Udeluft temperatur"],["supply_temperature","Indblæsning temperatur"],["extract_temperature","Udsugning temperatur"],["exhaust_temperature","Afkast temperatur"],["humidity","Luftfugtighed"],["efficiency","Varmegenvinding"],["fan_level","Ventilatortrin"],["filter_days_left","Filterdage"],["bypass","Bypass"],["summer_mode","Sommerdrift"],["defrost","Defrost"],["reheat","Eftervarme"]
+ ];this.shadowRoot.innerHTML=`<style>:host{display:block;padding:8px 0}.grid{display:grid;gap:14px}.field{display:grid;gap:6px}.field label,.section{font-weight:600}.section{margin-top:8px;padding-top:8px;border-top:1px solid var(--divider-color)}input{box-sizing:border-box;width:100%;padding:12px;border:1px solid var(--divider-color);border-radius:10px;background:var(--card-background-color);color:var(--primary-text-color)}</style><div class="grid"><div class="field"><label>Titel</label><input data-key="title" value="${this._config.title||""}"></div><div class="field"><label>Højde (px)</label><input data-key="height" type="number" min="420" max="1400" step="20" value="${this._config.height||720}"></div><div class="section">Home Assistant entities</div>${entities.map(([k,l])=>`<div class="field"><label>${l}</label><ha-entity-picker data-key="${k}" value="${this._config[k]||""}" allow-custom-entity></ha-entity-picker></div>`).join("")}</div>`;this.shadowRoot.querySelectorAll("input").forEach(x=>x.addEventListener("change",e=>this._change(e)));this.shadowRoot.querySelectorAll("ha-entity-picker").forEach(x=>{x.hass=this._hass;x.addEventListener("value-changed",e=>{e.target.value=e.detail.value;this._entity(e)})});this._rendered=true}
+}
+customElements.define("genvex-flow-card-editor",GenvexFlowCardEditor);
+\ncustomElements.define("genvex-flow-card",GenvexFlowCard);window.customCards=window.customCards||[];window.customCards.push({type:"genvex-flow-card",name:"Ventilation Flow Card",description:"Animated heat-recovery ventilation visualization",preview:true});console.info("%c VENTILATION-FLOW-CARD %c "+CARD_VERSION,"background:#078ee6;color:white;padding:3px","background:#333;color:white;padding:3px");
