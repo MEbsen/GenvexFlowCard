@@ -424,7 +424,7 @@ Action: switch.${action}\u2026`;
   console.info("%c VENTILATION-FLOW-CARD %c " + CARD_VERSION, "background:#078ee6;color:white;padding:3px", "background:#333;color:white;padding:3px");
 
   // src/ventilation-flow-card.js
-  var CARD_VERSION2 = "1.1.0-dev.6";
+  var CARD_VERSION2 = "1.1.0-dev.7";
   var Card = customElements.get("genvex-flow-card");
   if (!Card) throw new Error("Ventilation Flow Card: card core did not register");
   var providerFor = (card) => createProvider(card);
@@ -478,6 +478,43 @@ Action: switch.${action}\u2026`;
             toggle(e);
           }
         };
+      }
+      const fan = p.resolve("fan_control", "fan"), mode = p.resolve("operation_mode", "select"), ui = this.shadowRoot.querySelector(".ui"), steps = this.shadowRoot.querySelector(".steps"), level = this.shadowRoot.querySelector(".level");
+      if (fan && steps) {
+        const pct = Math.round(p.fanPercentage(fan));
+        steps.outerHTML = `<div class="danfossFan"><div class="danfossFanHead"><span>Ventilator</span><b data-fanpct>${pct}%</b></div><input data-fanslider type="range" min="10" max="100" step="10" value="${Math.max(10, pct || 10)}"></div>`;
+        if (level) level.style.display = "none";
+        const slider = this.shadowRoot.querySelector("[data-fanslider]"), out = this.shadowRoot.querySelector("[data-fanpct]");
+        slider?.addEventListener("input", (e) => {
+          if (out) out.textContent = `${e.target.value}%`;
+        });
+        slider?.addEventListener("change", (e) => p.setFanPercentage(fan, e.target.value));
+      }
+      const boost = this.shadowRoot.querySelector(".boost");
+      if (boost) {
+        boost.insertAdjacentHTML("afterend", `<button class="boost danfossAuto" ${mode ? "" : "disabled"}>AUTO</button><button class="boost danfossOff" ${fan ? "" : "disabled"}>SLUK</button>`);
+        const autoBtn = this.shadowRoot.querySelector(".danfossAuto"), offBtn = this.shadowRoot.querySelector(".danfossOff");
+        offBtn?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (fan) p.turnFanOff(fan);
+        });
+        autoBtn?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (!mode) return;
+          const st = this._hass?.states?.[mode], opts = st?.attributes?.options || [];
+          const auto = opts.find((x) => /auto/i.test(String(x)));
+          if (auto) this._hass.callService("select", "select_option", { entity_id: mode, option: auto });
+          else {
+            autoBtn.title = `AUTO option ikke fundet. Muligheder: ${opts.join(", ")}`;
+            console.warn("Ventilation Flow Card: Danfoss AUTO option not found", opts);
+          }
+        });
+      }
+      if (ui && !ui.querySelector("style[data-danfoss-style]")) {
+        const style = document.createElement("style");
+        style.dataset.danfossStyle = "";
+        style.textContent = `.danfossFan{margin:4px 0 12px}.danfossFanHead{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px}.danfossFanHead b{font-size:18px;color:#9ed4ff}.danfossFan input{width:100%;accent-color:#078ee6}.danfossAuto,.danfossOff{margin-top:8px}.danfossOff{border-color:#8a4650}`;
+        ui.appendChild(style);
       }
     }
   };
