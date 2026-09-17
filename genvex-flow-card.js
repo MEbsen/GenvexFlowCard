@@ -409,7 +409,7 @@ Action: switch.${action}\u2026`;
   console.info("%c VENTILATION-FLOW-CARD %c " + CARD_VERSION, "background:#078ee6;color:white;padding:3px", "background:#333;color:white;padding:3px");
 
   // src/ventilation-flow-card.js
-  var CARD_VERSION2 = "1.1.0-dev.5";
+  var CARD_VERSION2 = "1.1.0-dev.6";
   var Card = customElements.get("genvex-flow-card");
   if (!Card) throw new Error("Ventilation Flow Card: card core did not register");
   var providerFor = (card) => createProvider(card);
@@ -487,11 +487,15 @@ Action: switch.${action}\u2026`;
     render() {
       if (!this.shadowRoot) this.attachShadow({ mode: "open" });
       const c = this._config || {}, danfoss = c.provider === "danfoss_air", selected = c.ventilation_entity || c.genvex_entity || "";
-      this.shadowRoot.innerHTML = `<style>:host{display:block;padding:8px 0}.grid,.field{display:grid;gap:10px}.field{gap:5px}label{font-weight:600}select,input{width:100%;box-sizing:border-box;padding:10px}.hint{font-size:12px;color:var(--secondary-text-color)}</style><div class="grid"><div class="field"><label>Integration / provider</label><select data-provider><option value="genvex_connect" ${!danfoss ? "selected" : ""}>Genvex Connect</option><option value="danfoss_air" ${danfoss ? "selected" : ""}>Danfoss Air (experimental)</option></select></div><div class="field"><label>${danfoss ? "Danfoss Air entity (optional)" : "Genvex-anl\xE6g"}</label><ha-entity-picker data-entity value="${selected}" allow-custom-entity></ha-entity-picker><div class="hint">${danfoss ? "Danfoss entities findes automatisk." : "V\xE6lg \xE9n entity fra Genvex-anl\xE6gget."}</div></div><div class="field"><label>Titel</label><input data-key="title" value="${c.title || ""}"></div><div class="field"><label>H\xF8jde (px)</label><input data-key="height" type="number" value="${c.height || 720}"></div></div>`;
+      this.shadowRoot.innerHTML = `<style>:host{display:block;padding:8px 0}.grid,.field{display:grid;gap:10px}.field{gap:5px}label{font-weight:600}select,input{width:100%;box-sizing:border-box;padding:10px}.hint{font-size:12px;color:var(--secondary-text-color)}</style><div class="grid"><div class="field"><label>Integration / provider</label><select data-provider><option value="genvex_connect" ${!danfoss ? "selected" : ""}>Genvex Connect</option><option value="danfoss_air" ${danfoss ? "selected" : ""}>Danfoss Air (experimental)</option></select></div><div class="field"><label>${danfoss ? "Danfoss Air entity (optional)" : "Genvex-anl\xE6g"}</label><ha-entity-picker data-entity value="${selected}" allow-custom-entity></ha-entity-picker><div class="hint">${danfoss ? "Danfoss entities findes automatisk." : "V\xE6lg \xE9n entity fra Genvex-anl\xE6gget."}</div></div>${danfoss ? "" : `<div class="field"><label>Filterinterval (dage)</label><input data-key="filter_interval_days" type="number" min="1" step="1" value="${c.filter_interval_days ?? c.filter_days ?? 180}"><div class="hint">Bruges som fallback til at beregne n\xE6ste filterskift, hvis Genvex ikke leverer et brugbart interval.</div></div>`}<div class="field"><label>Titel</label><input data-key="title" value="${c.title || ""}"></div><div class="field"><label>H\xF8jde (px)</label><input data-key="height" type="number" value="${c.height || 720}"></div></div>`;
       const picker = this.shadowRoot.querySelector("[data-entity]");
       if (picker) picker.hass = this._hass;
       this.shadowRoot.querySelector("[data-provider]")?.addEventListener("change", (e) => this._fire({ ...c, provider: e.target.value, ventilation_entity: "" }));
-      this.shadowRoot.querySelectorAll("[data-key]").forEach((el) => el.addEventListener("change", (e) => this._fire({ ...this._config, [e.target.dataset.key]: e.target.type === "number" ? Number(e.target.value) : e.target.value })));
+      this.shadowRoot.querySelectorAll("[data-key]").forEach((el) => el.addEventListener("change", (e) => {
+        const key = e.target.dataset.key, value = e.target.type === "number" ? Number(e.target.value) : e.target.value, next = { ...this._config, [key]: value };
+        if (key === "filter_interval_days") next.filter_days = value;
+        this._fire(next);
+      }));
       picker?.addEventListener("value-changed", (e) => {
         const next = { ...this._config, ventilation_entity: e.detail.value };
         if (!danfoss) next.genvex_entity = e.detail.value;
