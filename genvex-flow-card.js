@@ -1,4 +1,4 @@
-const CARD_VERSION="1.1.0-dev.2";
+const CARD_VERSION="1.1.0-dev.3";
 
 /* HACS installs a single frontend file for this repository. Keep the adapter
  * layer in this bundle so the card never depends on sibling JS files being
@@ -25,13 +25,8 @@ class DanfossAirAdapter extends VentilationProviderAdapter {
 window.VentilationFlowProviders={base:VentilationProviderAdapter,genvex_connect:GenvexConnectAdapter,danfoss_air:DanfossAirAdapter,create(card){const requested=card.config?.provider||"genvex_connect";return new(requested==="danfoss_air"?DanfossAirAdapter:GenvexConnectAdapter)(card)}};
 
 (async()=>{
-  /* Load the proven 1.0 core from the stable HACS resource as a fallback. dev.2
-   * no longer assumes HACS installed adapters.js. */
   let Card=customElements.get("genvex-flow-card");
-  if(!Card){
-    try{await import(new URL("genvex-flow-card-core.js",import.meta.url))}catch(e){console.error("Ventilation Flow Card: core failed to load",e);return}
-    Card=customElements.get("genvex-flow-card");
-  }
+  if(!Card){try{await import(new URL("genvex-flow-card-core.js",import.meta.url))}catch(e){console.error("Ventilation Flow Card: core failed to load",e);return}Card=customElements.get("genvex-flow-card")}
   if(!Card){console.error("Ventilation Flow Card: card core is unavailable");return}
   const providerFor=card=>window.VentilationFlowProviders.create(card);
   Card.prototype.selectedDeviceId=function(){const p=providerFor(this);return typeof p.selectedDeviceId==="function"?p.selectedDeviceId():null};
