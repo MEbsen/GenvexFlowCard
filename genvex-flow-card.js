@@ -493,10 +493,11 @@ Action: switch.${action}\u2026`;
   console.info("%c VENTILATION-FLOW-CARD %c " + CARD_VERSION, "background:#078ee6;color:white;padding:3px", "background:#333;color:white;padding:3px");
 
   // src/ventilation-flow-card.js
-  var CARD_VERSION2 = "1.1.0-dev.16";
+  var CARD_VERSION2 = "1.1.0-dev.17";
   var Card = customElements.get("genvex-flow-card");
   if (!Card) throw new Error("Ventilation Flow Card: card core did not register");
   var providerFor = (card) => createProvider(card);
+  var isOn = (v) => ["on", "true", "open", "active", "1"].includes(String(v || "").toLowerCase());
   Card.prototype.selectedDeviceId = function() {
     const p = providerFor(this);
     return typeof p.selectedDeviceId === "function" ? p.selectedDeviceId() : null;
@@ -520,31 +521,28 @@ Action: switch.${action}\u2026`;
     }
     return originalState.call(this, entity, f);
   };
-  var iconifyStatus = (card) => {
+  var iconifyBypass = (card) => {
     const root = card.shadowRoot;
-    if (!root) return;
-    const filterWarn = root.querySelector(".filterHouseWarn");
-    if (filterWarn) {
-      filterWarn.innerHTML = `<g class="filterIcon" transform="translate(365 420)"><rect x="-17" y="-13" width="34" height="26" rx="4"></rect><path d="M-11 -7H11M-11 0H11M-11 7H11"></path><circle class="filterAlert" cx="23" cy="-13" r="9"></circle><text class="filterAlertText" x="23" y="-9" text-anchor="middle">!</text></g>`;
-      filterWarn.setAttribute("aria-label", "Filter kr\xE6ver opm\xE6rksomhed");
-      filterWarn.setAttribute("title", "Filter kr\xE6ver opm\xE6rksomhed");
-    }
-    const oldBypass = root.querySelector(".bypassCtl");
-    if (oldBypass && oldBypass.tagName?.toLowerCase() === "text") {
-      const ns = "http://www.w3.org/2000/svg", bypass2 = document.createElementNS(ns, "g");
-      bypass2.setAttribute("class", oldBypass.getAttribute("class") || "bypassCtl");
-      bypass2.setAttribute("transform", "translate(365 220)");
-      bypass2.setAttribute("aria-label", "Bypass");
-      bypass2.setAttribute("title", "Bypass");
-      const path2 = document.createElementNS(ns, "path");
-      path2.setAttribute("class", "bypassIconPath");
-      bypass2.appendChild(path2);
-      oldBypass.replaceWith(bypass2);
-    } else if (oldBypass) {
-      oldBypass.setAttribute("transform", "translate(365 220)");
-    }
-    const bypass = root.querySelector(".bypassCtl"), path = bypass?.querySelector(".bypassIconPath");
-    if (path) path.setAttribute("d", bypass.classList.contains("active") ? "M-8 14V-8l-5 5m5-5 5 5M8 -14V8l-5-5m5 5 5-5" : "M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5");
+    if (!root) return null;
+    let ctl = root.querySelector(".bypassCtl");
+    if (ctl?.tagName?.toLowerCase() === "text") {
+      const ns = "http://www.w3.org/2000/svg", g = document.createElementNS(ns, "g"), hit = document.createElementNS(ns, "circle"), path = document.createElementNS(ns, "path");
+      g.setAttribute("class", ctl.getAttribute("class") || "bypassCtl");
+      g.setAttribute("transform", "translate(365 220)");
+      g.setAttribute("aria-label", "Bypass");
+      g.setAttribute("title", "Bypass");
+      hit.setAttribute("class", "bypassHit");
+      hit.setAttribute("r", "28");
+      path.setAttribute("class", "bypassIconPath");
+      g.append(hit, path);
+      ctl.replaceWith(g);
+      ctl = g;
+    } else if (ctl) ctl.setAttribute("transform", "translate(365 220)");
+    return ctl;
+  };
+  var setBypassIcon = (ctl, on) => {
+    const path = ctl?.querySelector(".bypassIconPath");
+    if (path) path.setAttribute("d", on ? "M-8 14V-8l-5 5m5-5 5 5M8 -14V8l-5-5m5 5 5-5" : "M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5");
   };
   var addRpmLabel = (root, label, rpm) => {
     if (!Number.isFinite(rpm)) return;
@@ -557,9 +555,38 @@ Action: switch.${action}\u2026`;
     txt.textContent = `(${Math.round(rpm).toLocaleString("da-DK")} RPM)`;
     temp.after(txt);
   };
+  var renderDanfossFilter = (card, p) => {
+    const root = card.shadowRoot, entity = p.resolve("filter_remaining", "sensor"), box = root?.querySelector(".filterbox");
+    if (!root || !box) return;
+    const raw = Number(card._hass?.states?.[entity]?.state);
+    if (!entity || !Number.isFinite(raw)) {
+      box.style.display = "none";
+      return;
+    }
+    const pct = Math.max(0, Math.min(100, raw)), warning = pct <= 10;
+    box.style.display = "block";
+    box.classList.toggle("overdue", warning);
+    box.innerHTML = `<h3>FILTER ${warning ? "\u26A0" : ""}</h3><div><b>${pct.toFixed(0)}% tilbage</b></div><div class="filterbar"><i style="width:${pct}%"></i></div>`;
+    let warn = root.querySelector(".filterHouseWarn");
+    if (warning && !warn) {
+      const svg = root.querySelector("svg .scene") || root.querySelector("svg"), ns = "http://www.w3.org/2000/svg";
+      if (svg) {
+        warn = document.createElementNS(ns, "g");
+        warn.setAttribute("class", "filterHouseWarn");
+        warn.setAttribute("aria-label", "Filter kr\xE6ver opm\xE6rksomhed");
+        warn.innerHTML = `<g class="filterIcon" transform="translate(365 420)"><rect x="-17" y="-13" width="34" height="26" rx="4"></rect><path d="M-11 -7H11M-11 0H11M-11 7H11"></path><circle class="filterAlert" cx="23" cy="-13" r="9"></circle><text class="filterAlertText" x="23" y="-9" text-anchor="middle">!</text></g>`;
+        svg.appendChild(warn);
+      }
+    } else if (!warning && warn) warn.remove();
+  };
   var addBoostConfig = (card, p) => {
-    const root = card.shadowRoot, boost = root?.querySelector(".boost:not(.danfossAuto):not(.danfossOff)"), speed = p.resolve("boost_speed", "number"), duration = p.resolve("boost_duration", "number");
-    if (!root || !boost || !speed && !duration) return;
+    const root = card.shadowRoot;
+    if (!root) return;
+    root.querySelectorAll(".boostCfgBtn,.boostCfgPanel").forEach((el, i) => {
+      if (i || el.classList.contains("boostCfgBtn") || el.classList.contains("boostCfgPanel")) el.remove();
+    });
+    const boost = root.querySelector(".boost:not(.danfossAuto):not(.danfossOff)"), speed = p.resolve("boost_speed", "number"), duration = p.resolve("boost_duration", "number");
+    if (!boost || !speed && !duration) return;
     boost.classList.add("hasBoostCfg");
     const gear = document.createElement("button");
     gear.className = "boostCfgBtn";
@@ -591,55 +618,46 @@ Action: switch.${action}\u2026`;
   Card.prototype.render = function() {
     originalRender.call(this);
     if (!this.shadowRoot || !this.config) return;
-    const p = providerFor(this), status = this.shadowRoot.querySelector(".status b");
+    const p = providerFor(this), root = this.shadowRoot, status = root.querySelector(".status b");
     if (status) status.textContent = p.label + (p.experimental ? " \xB7 Experimental" : "");
-    iconifyStatus(this);
+    const ctl = iconifyBypass(this);
     if (p.id === "danfoss_air") {
-      const filter = p.resolve("filter_remaining", "sensor"), box = this.shadowRoot.querySelector(".filterbox");
-      if (filter && box) {
-        const raw = Number(this._hass?.states?.[filter]?.state);
-        if (Number.isFinite(raw)) {
-          const pct2 = Math.max(0, Math.min(100, raw));
-          box.innerHTML = `<h3>FILTER</h3><div><b>${pct2.toFixed(0)}% tilbage</b></div><div class="filterbar"><i style="width:${pct2}%"></i></div>`;
-        }
-      }
-      const bypass = p.resolve("bypass_active", "switch"), ctl = this.shadowRoot.querySelector(".bypassCtl");
+      renderDanfossFilter(this, p);
+      const bypass = p.resolve("bypass_active", "switch");
       if (bypass && ctl) {
-        const bypassOn = ["on", "true", "open", "active", "1"].includes(String(this._hass?.states?.[bypass]?.state || "").toLowerCase());
+        const bypassOn = isOn(this._hass?.states?.[bypass]?.state);
         ctl.classList.toggle("active", bypassOn);
-        const iconPath = ctl.querySelector(".bypassIconPath");
-        if (iconPath) iconPath.setAttribute("d", bypassOn ? "M-8 14V-8l-5 5m5-5 5 5M8 -14V8l-5-5m5 5 5-5" : "M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5");
         ctl.classList.add("clickable");
         ctl.setAttribute("tabindex", "0");
+        ctl.style.pointerEvents = "all";
+        setBypassIcon(ctl, bypassOn);
         const toggle = async (e) => {
+          e?.preventDefault?.();
           e?.stopPropagation?.();
-          const state = String(this._hass?.states?.[bypass]?.state || "").toLowerCase();
-          await this._hass.callService("switch", state === "on" ? "turn_off" : "turn_on", { entity_id: bypass });
+          const on = isOn(this._hass?.states?.[bypass]?.state);
+          await this._hass.callService("switch", on ? "turn_off" : "turn_on", { entity_id: bypass });
         };
         ctl.onclick = toggle;
         ctl.onkeydown = (e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            toggle(e);
-          }
+          if (e.key === "Enter" || e.key === " ") toggle(e);
         };
       }
-      const fan = p.resolve("fan_control", "fan"), mode = p.resolve("operation_mode", "select"), boostEntity = p.resolve("boost_enable", "switch"), supplyRpmEntity = p.resolve("supply_fan_rpm", "sensor"), exhaustRpmEntity = p.resolve("exhaust_fan_rpm", "sensor"), supplyRpm = Number(this._hass?.states?.[supplyRpmEntity]?.state), exhaustRpm = Number(this._hass?.states?.[exhaustRpmEntity]?.state), ui = this.shadowRoot.querySelector(".ui"), steps = this.shadowRoot.querySelector(".steps"), level = this.shadowRoot.querySelector(".level"), fanState = String(this._hass?.states?.[fan]?.state || "").toLowerCase(), fanOn = !!fan && fanState !== "off" && fanState !== "unavailable" && fanState !== "unknown", pct = fanOn ? Math.round(p.fanPercentage(fan)) : 0;
-      addRpmLabel(this.shadowRoot, "INDBL\xC6SNING", supplyRpm);
-      addRpmLabel(this.shadowRoot, "UDSUGNING", exhaustRpm);
+      const fan = p.resolve("fan_control", "fan"), mode = p.resolve("operation_mode", "select"), boostEntity = p.resolve("boost_enable", "switch"), supplyRpmEntity = p.resolve("supply_fan_rpm", "sensor"), exhaustRpmEntity = p.resolve("exhaust_fan_rpm", "sensor"), supplyRpm = Number(this._hass?.states?.[supplyRpmEntity]?.state), exhaustRpm = Number(this._hass?.states?.[exhaustRpmEntity]?.state), ui = root.querySelector(".ui"), steps = root.querySelector(".steps"), level = root.querySelector(".level"), fanState = String(this._hass?.states?.[fan]?.state || "").toLowerCase(), fanOn = !!fan && !["off", "unavailable", "unknown"].includes(fanState), pct = fanOn ? Math.round(p.fanPercentage(fan)) : 0;
+      addRpmLabel(root, "INDBL\xC6SNING", supplyRpm);
+      addRpmLabel(root, "UDSUGNING", exhaustRpm);
       const rpms = [supplyRpm, exhaustRpm].filter(Number.isFinite), rpmAvg = rpms.length ? rpms.reduce((a, b) => a + b, 0) / rpms.length : NaN, rpmPct = Number.isFinite(rpmAvg) && rpmAvg > 0 ? Math.max(5, Math.min(100, rpmAvg / 30)) : pct, animPct = fanOn ? rpmPct : 0, flowDuration = animPct <= 0 ? 0 : Math.max(0.55, 7.5 - Math.pow(animPct / 100, 0.55) * 6.95), rotorDuration = animPct <= 0 ? 0 : Math.max(0.45, 5.5 - Math.pow(animPct / 100, 0.6) * 5.05);
-      this.shadowRoot.querySelectorAll(".dots").forEach((el) => {
+      root.querySelectorAll(".dots").forEach((el) => {
         el.style.animationDuration = `${flowDuration || 1}s`;
         el.style.animationPlayState = fanOn ? "running" : "paused";
       });
-      this.shadowRoot.querySelectorAll(".fanRotor,.miniFan").forEach((el) => {
+      root.querySelectorAll(".fanRotor,.miniFan").forEach((el) => {
         el.style.animationDuration = `${rotorDuration || 1}s`;
         el.style.animationPlayState = fanOn ? "running" : "paused";
       });
       if (fan && steps) {
         steps.outerHTML = `<div class="danfossFan"><div class="danfossFanHead"><span>Ventilator</span><b data-fanpct>${pct}%</b></div><input data-fanslider type="range" min="0" max="100" step="10" value="${pct}"></div>`;
         if (level) level.style.display = "none";
-        const slider = this.shadowRoot.querySelector("[data-fanslider]"), out = this.shadowRoot.querySelector("[data-fanpct]");
+        const slider = root.querySelector("[data-fanslider]"), out = root.querySelector("[data-fanpct]");
         slider?.addEventListener("input", (e) => {
           if (out) out.textContent = `${e.target.value}%`;
         });
@@ -649,20 +667,19 @@ Action: switch.${action}\u2026`;
           else p.setFanPercentage(fan, value);
         });
       }
-      const boost = this.shadowRoot.querySelector(".boost");
+      const boost = root.querySelector(".boost:not(.danfossAuto):not(.danfossOff)");
       if (boost) {
         boost.insertAdjacentHTML("afterend", `<button class="boost danfossAuto" ${mode ? "" : "disabled"}>AUTO</button><button class="boost danfossOff ${!fanOn ? "on" : ""}" ${fan ? "" : "disabled"}>SLUK</button>`);
-        const autoBtn = this.shadowRoot.querySelector(".danfossAuto"), offBtn = this.shadowRoot.querySelector(".danfossOff");
+        const autoBtn = root.querySelector(".danfossAuto"), offBtn = root.querySelector(".danfossOff");
         offBtn?.addEventListener("click", async (e) => {
           e.stopPropagation();
-          if (boostEntity && ["on", "true", "active", "1"].includes(String(this._hass?.states?.[boostEntity]?.state || "").toLowerCase())) await this._hass.callService("switch", "turn_off", { entity_id: boostEntity });
+          if (boostEntity && isOn(this._hass?.states?.[boostEntity]?.state)) await this._hass.callService("switch", "turn_off", { entity_id: boostEntity });
           if (fan) await p.turnFanOff(fan);
         });
         autoBtn?.addEventListener("click", (e) => {
           e.stopPropagation();
           if (!mode) return;
-          const st = this._hass?.states?.[mode], opts = st?.attributes?.options || [];
-          const auto = opts.find((x) => /auto/i.test(String(x)));
+          const st = this._hass?.states?.[mode], opts = st?.attributes?.options || [], auto = opts.find((x) => /auto/i.test(String(x)));
           if (auto) this._hass.callService("select", "select_option", { entity_id: mode, option: auto });
           else {
             autoBtn.title = `AUTO option ikke fundet. Muligheder: ${opts.join(", ")}`;
@@ -678,11 +695,11 @@ Action: switch.${action}\u2026`;
       }
     }
     addBoostConfig(this, p);
-    if (!this.shadowRoot.querySelector("style[data-status-icons]")) {
+    if (!root.querySelector("style[data-status-icons]")) {
       const style = document.createElement("style");
       style.dataset.statusIcons = "";
-      style.textContent = `.filterHouseWarn .filterIcon rect{fill:#ff8a3d;stroke:#ffd0a8;stroke-width:2;filter:drop-shadow(0 0 8px #ff8a3d99)}.filterHouseWarn .filterIcon path{fill:none;stroke:#241308;stroke-width:3;stroke-linecap:round}.filterHouseWarn .filterAlert{fill:#ff8a3d;stroke:#ffe0c4;stroke-width:2;filter:drop-shadow(0 0 5px #ff8a3daa)}.filterHouseWarn .filterAlertText{fill:#241308;font:900 14px sans-serif;pointer-events:none}.bypassCtl{text-decoration:none!important}.bypassCtl .bypassIconPath{fill:none;stroke:#61788d;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;transition:stroke .2s}.bypassCtl.active .bypassIconPath{stroke:#63d8f2;filter:drop-shadow(0 0 6px #63d8f2)}.bypassCtl.clickable:hover .bypassIconPath{stroke:#eafaff}.boost.hasBoostCfg{width:calc(100% - 43px);border-radius:10px 0 0 10px}.boostCfgBtn{width:43px;margin-top:12px;padding:9px 0;border:1px solid #285777;border-left:0;border-radius:0 10px 10px 0;background:#0b2033;color:#dcefff;cursor:pointer;font-weight:700}.boostCfgBtn.on{background:#123653;color:#fff}.boostCfgPanel{display:none;margin-top:8px;padding:10px;border:1px solid #244866;border-radius:10px;background:#081a29}.boostCfgPanel.open{display:block}.boostCfgPanel label{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;font-size:11px;color:#9db7ca}.boostCfgPanel input{width:72px;background:#102b42;color:#eaf6ff;border:1px solid #355b78;border-radius:6px;padding:5px}`;
-      this.shadowRoot.appendChild(style);
+      style.textContent = `.filterHouseWarn .filterIcon rect{fill:#ff8a3d;stroke:#ffd0a8;stroke-width:2;filter:drop-shadow(0 0 8px #ff8a3d99)}.filterHouseWarn .filterIcon path{fill:none;stroke:#241308;stroke-width:3;stroke-linecap:round}.filterHouseWarn .filterAlert{fill:#ff8a3d;stroke:#ffe0c4;stroke-width:2}.filterHouseWarn .filterAlertText{fill:#241308;font:900 14px sans-serif;pointer-events:none}.bypassCtl{text-decoration:none!important;cursor:pointer}.bypassHit{fill:transparent;pointer-events:all}.bypassIconPath{fill:none;stroke:#61788d;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}.bypassCtl.active .bypassIconPath{stroke:#63d8f2;filter:drop-shadow(0 0 6px #63d8f2)}.bypassCtl:hover .bypassIconPath{stroke:#eafaff}.boost.hasBoostCfg{width:calc(100% - 43px);border-radius:10px 0 0 10px}.boostCfgBtn{width:43px;margin-top:12px;padding:9px 0;border:1px solid #285777;border-left:0;border-radius:0 10px 10px 0;background:#0b2033;color:#dcefff;cursor:pointer;font-weight:700}.boostCfgBtn.on{background:#123653}.boostCfgPanel{display:none;margin-top:8px;padding:10px;border:1px solid #244866;border-radius:10px;background:#081a29}.boostCfgPanel.open{display:block}.boostCfgPanel label{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;font-size:11px;color:#9db7ca}.boostCfgPanel input{width:72px;background:#102b42;color:#eaf6ff;border:1px solid #355b78;border-radius:6px;padding:5px}`;
+      root.appendChild(style);
     }
   };
   var originalBind = Card.prototype._bindControls;
