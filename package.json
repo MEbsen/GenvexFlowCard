@@ -1,11 +1,11 @@
 {
-  "name": "ventilation-flow-card",
-  "private": true,
-  "scripts": {
-    "build": "esbuild src/ventilation-flow-card.js --bundle --format=esm --target=es2020 --outfile=dist/genvex-flow-card.js",
-    "check": "npm run build && node --check dist/genvex-flow-card.js"
+  "name":"ventilation-flow-card",
+  "private":true,
+  "scripts":{
+    "prepare-core":"node scripts/prepare-core.mjs",
+    "build":"npm run prepare-core && esbuild src/ventilation-flow-card.js --bundle --format=iife --target=es2020 --outfile=dist/genvex-flow-card.js",
+    "smoke":"node scripts/smoke-test.mjs dist/genvex-flow-card.js",
+    "check":"npm run build && node --check dist/genvex-flow-card.js && npm run smoke"
   },
-  "devDependencies": {
-    "esbuild": "^0.25.0"
-  }
+  "devDependencies":{"esbuild":"0.25.10"}
 }

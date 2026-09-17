@@ -1,56 +1,36 @@
 name: Dev prerelease
-
 on:
   push:
     branches: [dev]
     paths:
-      - "genvex-flow-card.js"
+      - "src/**"
+      - "scripts/**"
       - "genvex-flow-card-core.js"
-      - "adapters.js"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/dev-release.yml"
-
 permissions:
   contents: write
-
 jobs:
   prerelease:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          fetch-depth: 0
-
+          node-version: 22
+      - name: Install build dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build and smoke test standalone card
+        run: npm run check
       - name: Read card version
         id: version
         shell: bash
         run: |
-          VERSION=$(sed -n 's/^const CARD_VERSION="\([^"]*\)";/\1/p' genvex-flow-card.js)
+          VERSION=$(sed -n 's/^const CARD_VERSION="\([^"]*\)";/\1/p' src/ventilation-flow-card.js)
           test -n "$VERSION"
+          echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-dev\.[0-9]+$'
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Validate prerelease version
-        shell: bash
-        run: |
-          echo "${{ steps.version.outputs.version }}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-dev\.[0-9]+$'
-
-      - name: Build standalone HACS card
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p release
-          VERSION="${{ steps.version.outputs.version }}"
-          printf 'const CARD_VERSION="%s";\n' "$VERSION" > release/genvex-flow-card.js
-          tail -n +2 genvex-flow-card-core.js >> release/genvex-flow-card.js
-          tail -n +2 genvex-flow-card.js | grep -vF 'await import(new URL("genvex-flow-card-core.js",import.meta.url))' >> release/genvex-flow-card.js || true
-          node --check release/genvex-flow-card.js
-          if grep -qF 'import(' release/genvex-flow-card.js; then
-            echo "Standalone artifact still contains a dynamic import"
-            exit 1
-          fi
-          grep -qF 'customElements.define("genvex-flow-card"' release/genvex-flow-card.js
-          grep -qF 'class DanfossAirAdapter' release/genvex-flow-card.js
-          grep -qF 'class GenvexConnectAdapter' release/genvex-flow-card.js
-
       - name: Create prerelease
         env:
           GH_TOKEN: ${{ github.token }}
@@ -61,8 +41,4 @@ jobs:
             echo "$TAG already exists; nothing to publish."
             exit 0
           fi
-          gh release create "$TAG" release/genvex-flow-card.js \
-            --target "${{ github.sha }}" \
-            --prerelease \
-            --title "$TAG" \
-            --generate-notes
+          gh release create "$TAG" dist/genvex-flow-card.js --target "${{ github.sha }}" --prerelease --title "$TAG" --generate-notes
