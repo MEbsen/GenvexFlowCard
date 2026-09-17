@@ -424,7 +424,7 @@ Action: switch.${action}\u2026`;
   console.info("%c VENTILATION-FLOW-CARD %c " + CARD_VERSION, "background:#078ee6;color:white;padding:3px", "background:#333;color:white;padding:3px");
 
   // src/ventilation-flow-card.js
-  var CARD_VERSION2 = "1.1.0-dev.11";
+  var CARD_VERSION2 = "1.1.0-dev.12";
   var Card = customElements.get("genvex-flow-card");
   if (!Card) throw new Error("Ventilation Flow Card: card core did not register");
   var providerFor = (card) => createProvider(card);
@@ -456,7 +456,7 @@ Action: switch.${action}\u2026`;
     if (!root) return;
     const filterWarn = root.querySelector(".filterHouseWarn");
     if (filterWarn) {
-      filterWarn.innerHTML = `<g class="filterIcon" transform="translate(365 388)"><rect x="-17" y="-13" width="34" height="26" rx="4"></rect><path d="M-11 -7H11M-11 0H11M-11 7H11"></path></g>`;
+      filterWarn.innerHTML = `<g class="filterIcon" transform="translate(365 420)"><rect x="-17" y="-13" width="34" height="26" rx="4"></rect><path d="M-11 -7H11M-11 0H11M-11 7H11"></path></g>`;
       filterWarn.setAttribute("aria-label", "Filter kr\xE6ver opm\xE6rksomhed");
       filterWarn.setAttribute("title", "Filter kr\xE6ver opm\xE6rksomhed");
     }
@@ -466,7 +466,7 @@ Action: switch.${action}\u2026`;
       bypass.removeAttribute("x");
       bypass.removeAttribute("y");
       bypass.removeAttribute("text-anchor");
-      bypass.innerHTML = `<g class="bypassIcon" transform="translate(365 248)"><path d="M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5"></path></g>`;
+      bypass.innerHTML = `<g class="bypassIcon" transform="translate(365 220)"><path d="M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5"></path></g>`;
       bypass.setAttribute("aria-label", "Bypass");
       bypass.setAttribute("title", "Bypass");
     }
