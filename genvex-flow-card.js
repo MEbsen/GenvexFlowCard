@@ -424,7 +424,7 @@ Action: switch.${action}\u2026`;
   console.info("%c VENTILATION-FLOW-CARD %c " + CARD_VERSION, "background:#078ee6;color:white;padding:3px", "background:#333;color:white;padding:3px");
 
   // src/ventilation-flow-card.js
-  var CARD_VERSION2 = "1.1.0-dev.12";
+  var CARD_VERSION2 = "1.1.0-dev.13";
   var Card = customElements.get("genvex-flow-card");
   if (!Card) throw new Error("Ventilation Flow Card: card core did not register");
   var providerFor = (card) => createProvider(card);
@@ -456,19 +456,24 @@ Action: switch.${action}\u2026`;
     if (!root) return;
     const filterWarn = root.querySelector(".filterHouseWarn");
     if (filterWarn) {
-      filterWarn.innerHTML = `<g class="filterIcon" transform="translate(365 420)"><rect x="-17" y="-13" width="34" height="26" rx="4"></rect><path d="M-11 -7H11M-11 0H11M-11 7H11"></path></g>`;
+      filterWarn.innerHTML = `<g class="filterIcon" transform="translate(365 420)"><rect x="-17" y="-13" width="34" height="26" rx="4"></rect><path d="M-11 -7H11M-11 0H11M-11 7H11"></path><circle class="filterAlert" cx="23" cy="-13" r="9"></circle><text class="filterAlertText" x="23" y="-9" text-anchor="middle">!</text></g>`;
       filterWarn.setAttribute("aria-label", "Filter kr\xE6ver opm\xE6rksomhed");
       filterWarn.setAttribute("title", "Filter kr\xE6ver opm\xE6rksomhed");
     }
-    const bypass = root.querySelector(".bypassCtl");
-    if (bypass) {
-      bypass.textContent = "";
-      bypass.removeAttribute("x");
-      bypass.removeAttribute("y");
-      bypass.removeAttribute("text-anchor");
-      bypass.innerHTML = `<g class="bypassIcon" transform="translate(365 220)"><path d="M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5"></path></g>`;
+    const oldBypass = root.querySelector(".bypassCtl");
+    if (oldBypass && oldBypass.tagName?.toLowerCase() === "text") {
+      const ns = "http://www.w3.org/2000/svg", bypass = document.createElementNS(ns, "g");
+      bypass.setAttribute("class", oldBypass.getAttribute("class") || "bypassCtl");
+      bypass.setAttribute("transform", "translate(365 220)");
       bypass.setAttribute("aria-label", "Bypass");
       bypass.setAttribute("title", "Bypass");
+      const path = document.createElementNS(ns, "path");
+      path.setAttribute("class", "bypassIconPath");
+      path.setAttribute("d", "M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5");
+      bypass.appendChild(path);
+      oldBypass.replaceWith(bypass);
+    } else if (oldBypass) {
+      oldBypass.setAttribute("transform", "translate(365 220)");
     }
   };
   var originalRender = Card.prototype.render;
@@ -557,7 +562,7 @@ Action: switch.${action}\u2026`;
     if (!this.shadowRoot.querySelector("style[data-status-icons]")) {
       const style = document.createElement("style");
       style.dataset.statusIcons = "";
-      style.textContent = `.filterHouseWarn .filterIcon rect{fill:#ff8a3d;stroke:#ffd0a8;stroke-width:2;filter:drop-shadow(0 0 8px #ff8a3d99)}.filterHouseWarn .filterIcon path{fill:none;stroke:#241308;stroke-width:3;stroke-linecap:round}.bypassCtl{text-decoration:none!important}.bypassIcon path{fill:none;stroke:#61788d;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}.bypassCtl.active .bypassIcon path{stroke:#63d8f2;filter:drop-shadow(0 0 6px #63d8f2)}.bypassCtl.clickable:hover .bypassIcon path{stroke:#eafaff}`;
+      style.textContent = `.filterHouseWarn .filterIcon rect{fill:#ff8a3d;stroke:#ffd0a8;stroke-width:2;filter:drop-shadow(0 0 8px #ff8a3d99)}.filterHouseWarn .filterIcon path{fill:none;stroke:#241308;stroke-width:3;stroke-linecap:round}.filterHouseWarn .filterAlert{fill:#ff8a3d;stroke:#ffe0c4;stroke-width:2;filter:drop-shadow(0 0 5px #ff8a3daa)}.filterHouseWarn .filterAlertText{fill:#241308;font:900 14px sans-serif;pointer-events:none}.bypassCtl{text-decoration:none!important}.bypassCtl .bypassIconPath{fill:none;stroke:#61788d;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}.bypassCtl.active .bypassIconPath{stroke:#63d8f2;filter:drop-shadow(0 0 6px #63d8f2)}.bypassCtl.clickable:hover .bypassIconPath{stroke:#eafaff}`;
       this.shadowRoot.appendChild(style);
     }
   };
