@@ -14,31 +14,60 @@ export function createProvider(card) {
 
 export { GenvexConnectAdapter, DanfossAirAdapter };
 
-// Optional boost tuning. Open/closed state belongs to the card instance so
-// Home Assistant state updates can re-render without closing the editor.
+// Keep interactive disclosure state on the card instance. HA may render the
+// card frequently; data updates must never decide what the user has opened.
 queueMicrotask(()=>{
   const Card=customElements.get("genvex-flow-card");
-  if(!Card||Card.prototype.__boostSettingsInstalled)return;
-  Card.prototype.__boostSettingsInstalled=true;
+  if(!Card||Card.prototype.__persistentUiInstalled)return;
+  Card.prototype.__persistentUiInstalled=true;
   const previousRender=Card.prototype.render;
   Card.prototype.render=function(){
     previousRender.call(this);
     const root=this.shadowRoot;if(!root||!this.config)return;
+
+    // BOOST configuration: provider capability driven and persistent.
     const p=createProvider(this),speed=p.resolve("boost_speed","number"),duration=p.resolve("boost_duration","number");
-    if(!speed&&!duration)return;
-    const boost=root.querySelector("button.boost:not(.danfossAuto):not(.danfossOff)");
-    if(!boost||root.querySelector(".boostSettingsRow"))return;
-    const row=document.createElement("div");row.className="boostSettingsRow";
-    boost.parentNode.insertBefore(row,boost);row.appendChild(boost);
-    const gear=document.createElement("button");gear.className="boostConfig";gear.type="button";gear.title="Boost indstillinger";gear.setAttribute("aria-label","Boost indstillinger");gear.textContent="⚙";row.appendChild(gear);
-    const panel=document.createElement("div");panel.className="boostSettings";
-    const field=(id,label)=>{if(!id)return"";const st=this._hass?.states?.[id],a=st?.attributes||{},value=st?.state??"",min=Number.isFinite(Number(a.min))?`min="${a.min}"`:"",max=Number.isFinite(Number(a.max))?`max="${a.max}"`:"",step=Number.isFinite(Number(a.step))?`step="${a.step}"`:'step="1"',unit=a.unit_of_measurement||"";return `<label>${label}<span><input type="number" data-boost-entity="${id}" ${min} ${max} ${step} value="${value}"><em>${unit}</em></span></label>`};
-    panel.innerHTML=`<div class="boostSettingsTitle">BOOST INDSTILLINGER</div>${field(speed,"Boost hastighed")}${field(duration,"Boost længde")}`;
-    row.insertAdjacentElement("afterend",panel);
-    const applyOpen=()=>{panel.classList.toggle("open",this._boostConfigOpen===true);gear.classList.toggle("on",this._boostConfigOpen===true);gear.setAttribute("aria-expanded",String(this._boostConfigOpen===true))};
-    applyOpen();
-    gear.addEventListener("click",e=>{e.stopPropagation();this._boostConfigOpen=!(this._boostConfigOpen===true);applyOpen()});
-    panel.querySelectorAll("[data-boost-entity]").forEach(input=>input.addEventListener("change",async e=>{const value=Number(e.target.value);if(!Number.isFinite(value))return;await this._hass.callService("number","set_value",{entity_id:e.target.dataset.boostEntity,value})}));
-    if(!root.querySelector("style[data-boost-settings]")){const style=document.createElement("style");style.dataset.boostSettings="";style.textContent=`.boostSettingsRow{display:grid;grid-template-columns:1fr 42px;gap:6px;margin-top:12px}.boostSettingsRow>.boost{margin-top:0}.boostConfig{border:1px solid #285777;background:#0b2033;color:#dcefff;border-radius:10px;cursor:pointer;font-size:18px;line-height:1}.boostConfig:hover,.boostConfig.on{background:#15527d;border-color:#4b83aa}.boostSettings{display:none;margin-top:7px;padding:10px;border:1px solid #244866;border-radius:10px;background:#081a29}.boostSettings.open{display:grid;gap:9px}.boostSettingsTitle{color:#9db7ca;font-size:10px;font-weight:700;letter-spacing:.08em}.boostSettings label{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:#cfe2f2}.boostSettings label span{display:flex;align-items:center;gap:5px}.boostSettings input{width:68px;box-sizing:border-box;border:1px solid #355b78;border-radius:7px;background:#102b42;color:#eaf6ff;padding:5px}.boostSettings em{min-width:20px;color:#7f9db5;font-size:10px;font-style:normal}`;root.appendChild(style)}
+    if(speed||duration){
+      const boost=root.querySelector("button.boost:not(.danfossAuto):not(.danfossOff)");
+      if(boost&&!root.querySelector(".boostSettingsRow")){
+        const row=document.createElement("div");row.className="boostSettingsRow";
+        boost.parentNode.insertBefore(row,boost);row.appendChild(boost);
+        const gear=document.createElement("button");gear.className="boostConfig";gear.type="button";gear.title="Boost indstillinger";gear.setAttribute("aria-label","Boost indstillinger");gear.textContent="⚙";row.appendChild(gear);
+        const panel=document.createElement("div");panel.className="boostSettings";
+        const field=(id,label)=>{if(!id)return"";const st=this._hass?.states?.[id],a=st?.attributes||{},value=st?.state??"",min=Number.isFinite(Number(a.min))?`min="${a.min}"`:"",max=Number.isFinite(Number(a.max))?`max="${a.max}"`:"",step=Number.isFinite(Number(a.step))?`step="${a.step}"`:'step="1"',unit=a.unit_of_measurement||"";return `<label>${label}<span><input type="number" data-boost-entity="${id}" ${min} ${max} ${step} value="${value}"><em>${unit}</em></span></label>`};
+        panel.innerHTML=`<div class="boostSettingsTitle">BOOST INDSTILLINGER</div>${field(speed,"Boost hastighed")}${field(duration,"Boost længde")}`;
+        row.insertAdjacentElement("afterend",panel);
+        const applyBoost=()=>{const open=this._boostConfigOpen===true;panel.classList.toggle("open",open);gear.classList.toggle("on",open);gear.setAttribute("aria-expanded",String(open))};
+        applyBoost();
+        gear.addEventListener("click",e=>{e.stopPropagation();this._boostConfigOpen=!(this._boostConfigOpen===true);applyBoost()});
+        panel.querySelectorAll("[data-boost-entity]").forEach(input=>input.addEventListener("change",async e=>{const value=Number(e.target.value);if(!Number.isFinite(value))return;await this._hass.callService("number","set_value",{entity_id:e.target.dataset.boostEntity,value})}));
+      }
+    }
+
+    // DRIFT is reference information, so keep it collapsed by default.
+    const ui=root.querySelector(".ui"),drift=[...(ui?.querySelectorAll("h3")||[])].find(h=>h.textContent.trim()==="DRIFT");
+    if(drift&&!root.querySelector(".driftAccordion")){
+      const body=document.createElement("div");body.className="driftAccordion";
+      let node=drift.nextElementSibling;
+      while(node&&!node.classList.contains("sep")){const next=node.nextElementSibling;body.appendChild(node);node=next}
+      drift.insertAdjacentElement("afterend",body);
+      drift.classList.add("accordionHead");drift.setAttribute("role","button");drift.setAttribute("tabindex","0");
+      const applyDrift=()=>{const open=this._driftInfoOpen===true;body.classList.toggle("open",open);drift.classList.toggle("open",open);drift.setAttribute("aria-expanded",String(open));drift.textContent=`DRIFT ${open?"▴":"▾"}`};
+      const toggle=e=>{e?.stopPropagation?.();this._driftInfoOpen=!(this._driftInfoOpen===true);applyDrift()};
+      applyDrift();drift.addEventListener("click",toggle);drift.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle(e)}});
+    }
+
+    // FILTER details/confirmation: restore state after every HA render. Core
+    // handlers still own the actions; these listeners only remember UI state.
+    const fb=root.querySelector("[data-filterbox]"),fd=root.querySelector("[data-filterdetail]"),fw=root.querySelector("[data-filterhouse]"),confirm=root.querySelector("[data-confirm]");
+    if(fd){fd.classList.toggle("open",this._filterDetailOpen===true);ui?.classList.toggle("filterExpanded",this._filterDetailOpen===true)}
+    if(confirm)confirm.classList.toggle("open",this._filterConfirmOpen===true);
+    fb?.addEventListener("click",e=>{if(!e.target.closest("button")){queueMicrotask(()=>{this._filterDetailOpen=fd?.classList.contains("open")===true})}});
+    fw?.addEventListener("click",()=>{this._filterDetailOpen=true;this._filterConfirmOpen=true});
+    root.querySelector("[data-filterreset]")?.addEventListener("click",()=>{this._filterConfirmOpen=true});
+    root.querySelector("[data-cancel]")?.addEventListener("click",()=>{this._filterConfirmOpen=false});
+    root.querySelector("[data-confirmreset]")?.addEventListener("click",()=>{this._filterConfirmOpen=false});
+
+    if(!root.querySelector("style[data-persistent-ui]")){const style=document.createElement("style");style.dataset.persistentUi="";style.textContent=`.boostSettingsRow{display:grid;grid-template-columns:1fr 42px;gap:6px;margin-top:12px}.boostSettingsRow>.boost{margin-top:0}.boostConfig{border:1px solid #285777;background:#0b2033;color:#dcefff;border-radius:10px;cursor:pointer;font-size:18px;line-height:1}.boostConfig:hover,.boostConfig.on{background:#15527d;border-color:#4b83aa}.boostSettings{display:none;margin-top:7px;padding:10px;border:1px solid #244866;border-radius:10px;background:#081a29}.boostSettings.open{display:grid;gap:9px}.boostSettingsTitle{color:#9db7ca;font-size:10px;font-weight:700;letter-spacing:.08em}.boostSettings label{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:#cfe2f2}.boostSettings label span{display:flex;align-items:center;gap:5px}.boostSettings input{width:68px;box-sizing:border-box;border:1px solid #355b78;border-radius:7px;background:#102b42;color:#eaf6ff;padding:5px}.boostSettings em{min-width:20px;color:#7f9db5;font-size:10px;font-style:normal}.accordionHead{display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;padding:2px 0}.accordionHead:hover{color:#cfe8fa}.driftAccordion{display:none}.driftAccordion.open{display:block}`;root.appendChild(style)}
   };
 });
