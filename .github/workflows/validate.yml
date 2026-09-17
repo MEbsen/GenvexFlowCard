@@ -15,5 +15,9 @@ jobs:
         run: |
           test -f hacs.json
           test -f genvex-flow-card.js
+          test -f genvex-flow-card-core.js
+          test -f adapters.js
           test -f README.md
           node --check genvex-flow-card.js
+          node --check genvex-flow-card-core.js
+          node --check adapters.js
