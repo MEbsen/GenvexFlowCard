@@ -16,11 +16,16 @@ export class DanfossAirAdapter extends VentilationProviderAdapter {
       operation_mode:["Danfoss Air Operation Mode"],
       filter_remaining:["Danfoss Air Remaining Filter"],
       boost_enable:["Danfoss Air Boost"],
+      boost_speed:["Danfoss Air Maximum Boost Step"],
+      boost_duration:["Danfoss Air Boost Duration"],
       bypass_active:["Danfoss Air Bypass"],
       automatic_bypass:["Danfoss Air Automatic Bypass"],
       supply_fan_rpm:["Danfoss Air Supply Fan Speed"],
       exhaust_fan_rpm:["Danfoss Air Exhaust Fan Speed"]
     };
+    const exact={boost_enable:"switch.danfoss_air_boost",boost_speed:"number.danfoss_air_maximum_boost_step",boost_duration:"number.danfoss_air_boost_duration",bypass_active:"switch.danfoss_air_bypass",automatic_bypass:"switch.danfoss_air_automatic_bypass",fan_control:"fan.danfoss_air_ventilation",operation_mode:"select.danfoss_air_operation_mode"};
+    const id=exact[key];
+    if(id&&(!domain||id.startsWith(domain+"."))&&this.hass?.states?.[id]) return id;
     return this.findByFriendlyName(map[key] || [], domain);
   }
   normalizeFanLevel(entityId) {
