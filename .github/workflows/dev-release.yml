@@ -5,6 +5,9 @@ on:
     branches: [dev]
     paths:
       - "genvex-flow-card.js"
+      - "genvex-flow-card-core.js"
+      - "adapters.js"
+      - ".github/workflows/dev-release.yml"
 
 permissions:
   contents: write
@@ -16,6 +19,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Read card version
         id: version
         shell: bash
@@ -23,10 +27,26 @@ jobs:
           VERSION=$(sed -n 's/^const CARD_VERSION="\([^"]*\)";/\1/p' genvex-flow-card.js)
           test -n "$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Validate prerelease version
         shell: bash
         run: |
           echo "${{ steps.version.outputs.version }}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-dev\.[0-9]+$'
+
+      - name: Build standalone HACS card
+        shell: bash
+        run: |
+          mkdir -p release
+          VERSION="${{ steps.version.outputs.version }}"
+          printf 'const CARD_VERSION="%s";\n' "$VERSION" > release/genvex-flow-card.js
+          tail -n +2 genvex-flow-card-core.js >> release/genvex-flow-card.js
+          tail -n +2 genvex-flow-card.js >> release/genvex-flow-card.js
+          node --check release/genvex-flow-card.js
+          if grep -Eq 'import\(|from[[:space:]]+["'"']\.\/' release/genvex-flow-card.js; then
+            echo "Standalone artifact still contains a local module dependency"
+            exit 1
+          fi
+
       - name: Create prerelease
         env:
           GH_TOKEN: ${{ github.token }}
@@ -37,7 +57,7 @@ jobs:
             echo "$TAG already exists; nothing to publish."
             exit 0
           fi
-          gh release create "$TAG" genvex-flow-card.js \
+          gh release create "$TAG" release/genvex-flow-card.js \
             --target "${{ github.sha }}" \
             --prerelease \
             --title "$TAG" \
