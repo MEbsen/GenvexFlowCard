@@ -424,7 +424,7 @@ Action: switch.${action}\u2026`;
   console.info("%c VENTILATION-FLOW-CARD %c " + CARD_VERSION, "background:#078ee6;color:white;padding:3px", "background:#333;color:white;padding:3px");
 
   // src/ventilation-flow-card.js
-  var CARD_VERSION2 = "1.1.0-dev.13";
+  var CARD_VERSION2 = "1.1.0-dev.14";
   var Card = customElements.get("genvex-flow-card");
   if (!Card) throw new Error("Ventilation Flow Card: card core did not register");
   var providerFor = (card) => createProvider(card);
@@ -462,19 +462,21 @@ Action: switch.${action}\u2026`;
     }
     const oldBypass = root.querySelector(".bypassCtl");
     if (oldBypass && oldBypass.tagName?.toLowerCase() === "text") {
-      const ns = "http://www.w3.org/2000/svg", bypass = document.createElementNS(ns, "g");
-      bypass.setAttribute("class", oldBypass.getAttribute("class") || "bypassCtl");
-      bypass.setAttribute("transform", "translate(365 220)");
-      bypass.setAttribute("aria-label", "Bypass");
-      bypass.setAttribute("title", "Bypass");
-      const path = document.createElementNS(ns, "path");
-      path.setAttribute("class", "bypassIconPath");
-      path.setAttribute("d", "M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5");
-      bypass.appendChild(path);
-      oldBypass.replaceWith(bypass);
+      const ns = "http://www.w3.org/2000/svg", bypass2 = document.createElementNS(ns, "g");
+      bypass2.setAttribute("class", oldBypass.getAttribute("class") || "bypassCtl");
+      bypass2.setAttribute("transform", "translate(365 220)");
+      bypass2.setAttribute("aria-label", "Bypass");
+      bypass2.setAttribute("title", "Bypass");
+      const path2 = document.createElementNS(ns, "path");
+      path2.setAttribute("class", "bypassIconPath");
+      path2.setAttribute("d", "M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5");
+      bypass2.appendChild(path2);
+      oldBypass.replaceWith(bypass2);
     } else if (oldBypass) {
       oldBypass.setAttribute("transform", "translate(365 220)");
     }
+    const bypass = root.querySelector(".bypassCtl"), path = bypass?.querySelector(".bypassIconPath");
+    if (path) path.setAttribute("d", bypass.classList.contains("active") ? "M-8 14V-8l-5 5m5-5 5 5M8 -14V8l-5-5m5 5 5-5" : "M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5");
   };
   var originalRender = Card.prototype.render;
   Card.prototype.render = function() {
@@ -494,6 +496,10 @@ Action: switch.${action}\u2026`;
       }
       const bypass = p.resolve("bypass_active", "switch"), ctl = this.shadowRoot.querySelector(".bypassCtl");
       if (bypass && ctl) {
+        const bypassOn = ["on", "true", "open", "active", "1"].includes(String(this._hass?.states?.[bypass]?.state || "").toLowerCase());
+        ctl.classList.toggle("active", bypassOn);
+        const iconPath = ctl.querySelector(".bypassIconPath");
+        if (iconPath) iconPath.setAttribute("d", bypassOn ? "M-8 14V-8l-5 5m5-5 5 5M8 -14V8l-5-5m5 5 5-5" : "M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5");
         ctl.classList.add("clickable");
         ctl.setAttribute("tabindex", "0");
         const toggle = async (e) => {
@@ -562,7 +568,7 @@ Action: switch.${action}\u2026`;
     if (!this.shadowRoot.querySelector("style[data-status-icons]")) {
       const style = document.createElement("style");
       style.dataset.statusIcons = "";
-      style.textContent = `.filterHouseWarn .filterIcon rect{fill:#ff8a3d;stroke:#ffd0a8;stroke-width:2;filter:drop-shadow(0 0 8px #ff8a3d99)}.filterHouseWarn .filterIcon path{fill:none;stroke:#241308;stroke-width:3;stroke-linecap:round}.filterHouseWarn .filterAlert{fill:#ff8a3d;stroke:#ffe0c4;stroke-width:2;filter:drop-shadow(0 0 5px #ff8a3daa)}.filterHouseWarn .filterAlertText{fill:#241308;font:900 14px sans-serif;pointer-events:none}.bypassCtl{text-decoration:none!important}.bypassCtl .bypassIconPath{fill:none;stroke:#61788d;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}.bypassCtl.active .bypassIconPath{stroke:#63d8f2;filter:drop-shadow(0 0 6px #63d8f2)}.bypassCtl.clickable:hover .bypassIconPath{stroke:#eafaff}`;
+      style.textContent = `.filterHouseWarn .filterIcon rect{fill:#ff8a3d;stroke:#ffd0a8;stroke-width:2;filter:drop-shadow(0 0 8px #ff8a3d99)}.filterHouseWarn .filterIcon path{fill:none;stroke:#241308;stroke-width:3;stroke-linecap:round}.filterHouseWarn .filterAlert{fill:#ff8a3d;stroke:#ffe0c4;stroke-width:2;filter:drop-shadow(0 0 5px #ff8a3daa)}.filterHouseWarn .filterAlertText{fill:#241308;font:900 14px sans-serif;pointer-events:none}.bypassCtl{text-decoration:none!important}.bypassCtl .bypassIconPath{fill:none;stroke:#61788d;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;transition:stroke .2s}.bypassCtl.active .bypassIconPath{stroke:#63d8f2;filter:drop-shadow(0 0 6px #63d8f2)}.bypassCtl.clickable:hover .bypassIconPath{stroke:#eafaff}`;
       this.shadowRoot.appendChild(style);
     }
   };
