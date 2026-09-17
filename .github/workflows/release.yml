@@ -13,13 +13,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate stable release tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
+
       - name: Create release artifact
         run: |
-          mkdir release
+          mkdir -p release
           cp genvex-flow-card.js release/
           cd release
           zip genvex-flow-card.zip genvex-flow-card.js
+
       - uses: softprops/action-gh-release@v2
         with:
-          files: |\n            release/genvex-flow-card.js\n            release/genvex-flow-card.zip
+          files: |
+            release/genvex-flow-card.js
+            release/genvex-flow-card.zip
           generate_release_notes: true
