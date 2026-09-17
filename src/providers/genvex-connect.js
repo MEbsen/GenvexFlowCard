@@ -16,7 +16,7 @@ export class GenvexConnectAdapter extends VentilationProviderAdapter {
     const deviceId = this.selectedDeviceId();
     const aliases = {
       fan_speed:["fan level","fan speed","ventilator trin","ventilator hastighed"],
-      boost_enable:["boost"], temp_supply:["temperature supply air","temperatur tilluft"],
+      boost_enable:["boost"], boost_speed:["boost speed","boost fan speed","boost level","boost step","boost hastighed","boost trin"], boost_duration:["boost duration","boost time","boost timer","boost længde","boost tid"], temp_supply:["temperature supply air","temperatur tilluft"],
       temp_extract:["temperature extract air","temperatur fraluft"], temp_outside:["temperature outside air","temperatur udeluft"],
       temp_exhaust:["temperature exhaust air","temperatur afkastluft"], humidity:["humidity","luftfugtighed"],
       filter_days_left:["days left until filter change","dage til filter skift"], filter_days:["days since filter change","dage siden filter skift","filter days","filterdage"],
