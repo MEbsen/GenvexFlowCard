@@ -482,7 +482,7 @@ Action: switch.${action}\u2026`;
   console.info("%c VENTILATION-FLOW-CARD %c " + CARD_VERSION, "background:#078ee6;color:white;padding:3px", "background:#333;color:white;padding:3px");
 
   // src/ventilation-flow-card.js
-  var CARD_VERSION2 = "1.1.0-dev.15";
+  var CARD_VERSION2 = "1.1.0-dev.16";
   var Card = customElements.get("genvex-flow-card");
   if (!Card) throw new Error("Ventilation Flow Card: card core did not register");
   var providerFor = (card) => createProvider(card);
@@ -527,7 +527,6 @@ Action: switch.${action}\u2026`;
       bypass2.setAttribute("title", "Bypass");
       const path2 = document.createElementNS(ns, "path");
       path2.setAttribute("class", "bypassIconPath");
-      path2.setAttribute("d", "M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5");
       bypass2.appendChild(path2);
       oldBypass.replaceWith(bypass2);
     } else if (oldBypass) {
@@ -535,6 +534,47 @@ Action: switch.${action}\u2026`;
     }
     const bypass = root.querySelector(".bypassCtl"), path = bypass?.querySelector(".bypassIconPath");
     if (path) path.setAttribute("d", bypass.classList.contains("active") ? "M-8 14V-8l-5 5m5-5 5 5M8 -14V8l-5-5m5 5 5-5" : "M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5");
+  };
+  var addRpmLabel = (root, label, rpm) => {
+    if (!Number.isFinite(rpm)) return;
+    const lbl = [...root.querySelectorAll(".label")].find((x) => x.textContent.trim() === label), temp = lbl?.nextElementSibling;
+    if (!temp) return;
+    const ns = "http://www.w3.org/2000/svg", txt = document.createElementNS(ns, "text");
+    txt.setAttribute("class", "rpmValue");
+    txt.setAttribute("x", temp.getAttribute("x") || "0");
+    txt.setAttribute("y", String(Number(temp.getAttribute("y") || 0) + 19));
+    txt.textContent = `(${Math.round(rpm).toLocaleString("da-DK")} RPM)`;
+    temp.after(txt);
+  };
+  var addBoostConfig = (card, p) => {
+    const root = card.shadowRoot, boost = root?.querySelector(".boost:not(.danfossAuto):not(.danfossOff)"), speed = p.resolve("boost_speed", "number"), duration = p.resolve("boost_duration", "number");
+    if (!root || !boost || !speed && !duration) return;
+    boost.classList.add("hasBoostCfg");
+    const gear = document.createElement("button");
+    gear.className = "boostCfgBtn";
+    gear.type = "button";
+    gear.title = "Boost indstillinger";
+    gear.setAttribute("aria-label", "Boost indstillinger");
+    gear.textContent = "\u2699";
+    boost.after(gear);
+    const panel = document.createElement("div");
+    panel.className = "boostCfgPanel";
+    const field = (id, label) => {
+      if (!id) return "";
+      const st = card._hass?.states?.[id], v = st?.state ?? "", min = st?.attributes?.min ?? 0, max = st?.attributes?.max ?? 100, step = st?.attributes?.step ?? 1, unit = st?.attributes?.unit_of_measurement || "";
+      return `<label>${label}<span><input type="number" data-boost-number="${id}" value="${v}" min="${min}" max="${max}" step="${step}"> ${unit}</span></label>`;
+    };
+    panel.innerHTML = field(speed, "Boost hastighed") + field(duration, "Boost l\xE6ngde");
+    gear.after(panel);
+    gear.onclick = (e) => {
+      e.stopPropagation();
+      panel.classList.toggle("open");
+      gear.classList.toggle("on", panel.classList.contains("open"));
+    };
+    panel.querySelectorAll("[data-boost-number]").forEach((input) => input.addEventListener("change", (e) => {
+      const value = Number(e.target.value);
+      if (Number.isFinite(value)) card._hass.callService("number", "set_value", { entity_id: e.target.dataset.boostNumber, value });
+    }));
   };
   var originalRender = Card.prototype.render;
   Card.prototype.render = function() {
@@ -573,8 +613,10 @@ Action: switch.${action}\u2026`;
           }
         };
       }
-      const fan = p.resolve("fan_control", "fan"), mode = p.resolve("operation_mode", "select"), ui = this.shadowRoot.querySelector(".ui"), steps = this.shadowRoot.querySelector(".steps"), level = this.shadowRoot.querySelector(".level"), fanState = String(this._hass?.states?.[fan]?.state || "").toLowerCase(), fanOn = !!fan && fanState !== "off" && fanState !== "unavailable" && fanState !== "unknown", pct = fanOn ? Math.round(p.fanPercentage(fan)) : 0;
-      const flowDuration = pct <= 0 ? 0 : Math.max(0.55, 7.5 - Math.pow(pct / 100, 0.55) * 6.95), rotorDuration = pct <= 0 ? 0 : Math.max(0.45, 5.5 - Math.pow(pct / 100, 0.6) * 5.05);
+      const fan = p.resolve("fan_control", "fan"), mode = p.resolve("operation_mode", "select"), boostEntity = p.resolve("boost_enable", "switch"), supplyRpmEntity = p.resolve("supply_fan_rpm", "sensor"), exhaustRpmEntity = p.resolve("exhaust_fan_rpm", "sensor"), supplyRpm = Number(this._hass?.states?.[supplyRpmEntity]?.state), exhaustRpm = Number(this._hass?.states?.[exhaustRpmEntity]?.state), ui = this.shadowRoot.querySelector(".ui"), steps = this.shadowRoot.querySelector(".steps"), level = this.shadowRoot.querySelector(".level"), fanState = String(this._hass?.states?.[fan]?.state || "").toLowerCase(), fanOn = !!fan && fanState !== "off" && fanState !== "unavailable" && fanState !== "unknown", pct = fanOn ? Math.round(p.fanPercentage(fan)) : 0;
+      addRpmLabel(this.shadowRoot, "INDBL\xC6SNING", supplyRpm);
+      addRpmLabel(this.shadowRoot, "UDSUGNING", exhaustRpm);
+      const rpms = [supplyRpm, exhaustRpm].filter(Number.isFinite), rpmAvg = rpms.length ? rpms.reduce((a, b) => a + b, 0) / rpms.length : NaN, rpmPct = Number.isFinite(rpmAvg) && rpmAvg > 0 ? Math.max(5, Math.min(100, rpmAvg / 30)) : pct, animPct = fanOn ? rpmPct : 0, flowDuration = animPct <= 0 ? 0 : Math.max(0.55, 7.5 - Math.pow(animPct / 100, 0.55) * 6.95), rotorDuration = animPct <= 0 ? 0 : Math.max(0.45, 5.5 - Math.pow(animPct / 100, 0.6) * 5.05);
       this.shadowRoot.querySelectorAll(".dots").forEach((el) => {
         el.style.animationDuration = `${flowDuration || 1}s`;
         el.style.animationPlayState = fanOn ? "running" : "paused";
@@ -600,9 +642,10 @@ Action: switch.${action}\u2026`;
       if (boost) {
         boost.insertAdjacentHTML("afterend", `<button class="boost danfossAuto" ${mode ? "" : "disabled"}>AUTO</button><button class="boost danfossOff ${!fanOn ? "on" : ""}" ${fan ? "" : "disabled"}>SLUK</button>`);
         const autoBtn = this.shadowRoot.querySelector(".danfossAuto"), offBtn = this.shadowRoot.querySelector(".danfossOff");
-        offBtn?.addEventListener("click", (e) => {
+        offBtn?.addEventListener("click", async (e) => {
           e.stopPropagation();
-          if (fan) p.turnFanOff(fan);
+          if (boostEntity && ["on", "true", "active", "1"].includes(String(this._hass?.states?.[boostEntity]?.state || "").toLowerCase())) await this._hass.callService("switch", "turn_off", { entity_id: boostEntity });
+          if (fan) await p.turnFanOff(fan);
         });
         autoBtn?.addEventListener("click", (e) => {
           e.stopPropagation();
@@ -619,14 +662,15 @@ Action: switch.${action}\u2026`;
       if (ui && !ui.querySelector("style[data-danfoss-style]")) {
         const style = document.createElement("style");
         style.dataset.danfossStyle = "";
-        style.textContent = `.danfossFan{margin:4px 0 12px}.danfossFanHead{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px}.danfossFanHead b{font-size:18px;color:#9ed4ff}.danfossFan input{width:100%;accent-color:#078ee6}.danfossAuto,.danfossOff{margin-top:8px}.danfossOff{border-color:#8a4650}`;
+        style.textContent = `.danfossFan{margin:4px 0 12px}.danfossFanHead{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px}.danfossFanHead b{font-size:18px;color:#9ed4ff}.danfossFan input{width:100%;accent-color:#078ee6}.danfossAuto,.danfossOff{margin-top:8px}.danfossOff{border-color:#8a4650}.rpmValue{font:500 12px sans-serif;fill:#7894ac}`;
         ui.appendChild(style);
       }
     }
+    addBoostConfig(this, p);
     if (!this.shadowRoot.querySelector("style[data-status-icons]")) {
       const style = document.createElement("style");
       style.dataset.statusIcons = "";
-      style.textContent = `.filterHouseWarn .filterIcon rect{fill:#ff8a3d;stroke:#ffd0a8;stroke-width:2;filter:drop-shadow(0 0 8px #ff8a3d99)}.filterHouseWarn .filterIcon path{fill:none;stroke:#241308;stroke-width:3;stroke-linecap:round}.filterHouseWarn .filterAlert{fill:#ff8a3d;stroke:#ffe0c4;stroke-width:2;filter:drop-shadow(0 0 5px #ff8a3daa)}.filterHouseWarn .filterAlertText{fill:#241308;font:900 14px sans-serif;pointer-events:none}.bypassCtl{text-decoration:none!important}.bypassCtl .bypassIconPath{fill:none;stroke:#61788d;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;transition:stroke .2s}.bypassCtl.active .bypassIconPath{stroke:#63d8f2;filter:drop-shadow(0 0 6px #63d8f2)}.bypassCtl.clickable:hover .bypassIconPath{stroke:#eafaff}`;
+      style.textContent = `.filterHouseWarn .filterIcon rect{fill:#ff8a3d;stroke:#ffd0a8;stroke-width:2;filter:drop-shadow(0 0 8px #ff8a3d99)}.filterHouseWarn .filterIcon path{fill:none;stroke:#241308;stroke-width:3;stroke-linecap:round}.filterHouseWarn .filterAlert{fill:#ff8a3d;stroke:#ffe0c4;stroke-width:2;filter:drop-shadow(0 0 5px #ff8a3daa)}.filterHouseWarn .filterAlertText{fill:#241308;font:900 14px sans-serif;pointer-events:none}.bypassCtl{text-decoration:none!important}.bypassCtl .bypassIconPath{fill:none;stroke:#61788d;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;transition:stroke .2s}.bypassCtl.active .bypassIconPath{stroke:#63d8f2;filter:drop-shadow(0 0 6px #63d8f2)}.bypassCtl.clickable:hover .bypassIconPath{stroke:#eafaff}.boost.hasBoostCfg{width:calc(100% - 43px);border-radius:10px 0 0 10px}.boostCfgBtn{width:43px;margin-top:12px;padding:9px 0;border:1px solid #285777;border-left:0;border-radius:0 10px 10px 0;background:#0b2033;color:#dcefff;cursor:pointer;font-weight:700}.boostCfgBtn.on{background:#123653;color:#fff}.boostCfgPanel{display:none;margin-top:8px;padding:10px;border:1px solid #244866;border-radius:10px;background:#081a29}.boostCfgPanel.open{display:block}.boostCfgPanel label{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;font-size:11px;color:#9db7ca}.boostCfgPanel input{width:72px;background:#102b42;color:#eaf6ff;border:1px solid #355b78;border-radius:6px;padding:5px}`;
       this.shadowRoot.appendChild(style);
     }
   };
