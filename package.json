@@ -1,0 +1,11 @@
+{
+  "name": "ventilation-flow-card",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/ventilation-flow-card.js --bundle --format=esm --target=es2020 --outfile=dist/genvex-flow-card.js",
+    "check": "npm run build && node --check dist/genvex-flow-card.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
