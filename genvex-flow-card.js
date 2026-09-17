@@ -424,7 +424,7 @@ Action: switch.${action}\u2026`;
   console.info("%c VENTILATION-FLOW-CARD %c " + CARD_VERSION, "background:#078ee6;color:white;padding:3px", "background:#333;color:white;padding:3px");
 
   // src/ventilation-flow-card.js
-  var CARD_VERSION2 = "1.1.0-dev.8";
+  var CARD_VERSION2 = "1.1.0-dev.9";
   var Card = customElements.get("genvex-flow-card");
   if (!Card) throw new Error("Ventilation Flow Card: card core did not register");
   var providerFor = (card) => createProvider(card);
@@ -451,19 +451,37 @@ Action: switch.${action}\u2026`;
     }
     return originalState.call(this, entity, f);
   };
+  var iconifyStatus = (card) => {
+    const root = card.shadowRoot;
+    if (!root) return;
+    const filterWarn = root.querySelector(".filterHouseWarn");
+    if (filterWarn) {
+      filterWarn.innerHTML = `<g class="filterIcon"><rect x="-17" y="-13" width="34" height="26" rx="4"></rect><path d="M-11 -7H11M-11 0H11M-11 7H11"></path></g>`;
+      filterWarn.setAttribute("aria-label", "Filter kr\xE6ver opm\xE6rksomhed");
+      filterWarn.setAttribute("title", "Filter kr\xE6ver opm\xE6rksomhed");
+    }
+    const bypass = root.querySelector(".bypassCtl");
+    if (bypass) {
+      bypass.textContent = "";
+      bypass.innerHTML = `<g class="bypassIcon"><path d="M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5"></path></g>`;
+      bypass.setAttribute("aria-label", "Bypass");
+      bypass.setAttribute("title", "Bypass");
+    }
+  };
   var originalRender = Card.prototype.render;
   Card.prototype.render = function() {
     originalRender.call(this);
     if (!this.shadowRoot || !this.config) return;
     const p = providerFor(this), status = this.shadowRoot.querySelector(".status b");
     if (status) status.textContent = p.label + (p.experimental ? " \xB7 Experimental" : "");
+    iconifyStatus(this);
     if (p.id === "danfoss_air") {
       const filter = p.resolve("filter_remaining", "sensor"), box = this.shadowRoot.querySelector(".filterbox");
       if (filter && box) {
         const raw = Number(this._hass?.states?.[filter]?.state);
         if (Number.isFinite(raw)) {
-          const pct = Math.max(0, Math.min(100, raw));
-          box.innerHTML = `<h3>FILTER</h3><div><b>${pct.toFixed(0)}% tilbage</b></div><div class="filterbar"><i style="width:${pct}%"></i></div>`;
+          const pct2 = Math.max(0, Math.min(100, raw));
+          box.innerHTML = `<h3>FILTER</h3><div><b>${pct2.toFixed(0)}% tilbage</b></div><div class="filterbar"><i style="width:${pct2}%"></i></div>`;
         }
       }
       const bypass = p.resolve("bypass_active", "switch"), ctl = this.shadowRoot.querySelector(".bypassCtl");
@@ -483,9 +501,17 @@ Action: switch.${action}\u2026`;
           }
         };
       }
-      const fan = p.resolve("fan_control", "fan"), mode = p.resolve("operation_mode", "select"), ui = this.shadowRoot.querySelector(".ui"), steps = this.shadowRoot.querySelector(".steps"), level = this.shadowRoot.querySelector(".level"), fanState = String(this._hass?.states?.[fan]?.state || "").toLowerCase(), fanOn = !!fan && fanState !== "off" && fanState !== "unavailable" && fanState !== "unknown";
+      const fan = p.resolve("fan_control", "fan"), mode = p.resolve("operation_mode", "select"), ui = this.shadowRoot.querySelector(".ui"), steps = this.shadowRoot.querySelector(".steps"), level = this.shadowRoot.querySelector(".level"), fanState = String(this._hass?.states?.[fan]?.state || "").toLowerCase(), fanOn = !!fan && fanState !== "off" && fanState !== "unavailable" && fanState !== "unknown", pct = fanOn ? Math.round(p.fanPercentage(fan)) : 0;
+      const flowDuration = pct <= 0 ? 0 : Math.max(0.55, 7.5 - Math.pow(pct / 100, 0.55) * 6.95), rotorDuration = pct <= 0 ? 0 : Math.max(0.45, 5.5 - Math.pow(pct / 100, 0.6) * 5.05);
+      this.shadowRoot.querySelectorAll(".dots").forEach((el) => {
+        el.style.animationDuration = `${flowDuration || 1}s`;
+        el.style.animationPlayState = fanOn ? "running" : "paused";
+      });
+      this.shadowRoot.querySelectorAll(".fanRotor,.miniFan").forEach((el) => {
+        el.style.animationDuration = `${rotorDuration || 1}s`;
+        el.style.animationPlayState = fanOn ? "running" : "paused";
+      });
       if (fan && steps) {
-        const pct = fanOn ? Math.round(p.fanPercentage(fan)) : 0;
         steps.outerHTML = `<div class="danfossFan"><div class="danfossFanHead"><span>Ventilator</span><b data-fanpct>${pct}%</b></div><input data-fanslider type="range" min="0" max="100" step="10" value="${pct}"></div>`;
         if (level) level.style.display = "none";
         const slider = this.shadowRoot.querySelector("[data-fanslider]"), out = this.shadowRoot.querySelector("[data-fanpct]");
@@ -497,11 +523,6 @@ Action: switch.${action}\u2026`;
           if (value <= 0) p.turnFanOff(fan);
           else p.setFanPercentage(fan, value);
         });
-      }
-      const coreFan = this.shadowRoot.querySelector(".fan"), miniFan = this.shadowRoot.querySelector(".miniFan");
-      if (!fanOn) {
-        if (coreFan) coreFan.style.animationPlayState = "paused";
-        if (miniFan) miniFan.style.animationPlayState = "paused";
       }
       const boost = this.shadowRoot.querySelector(".boost");
       if (boost) {
@@ -529,6 +550,12 @@ Action: switch.${action}\u2026`;
         style.textContent = `.danfossFan{margin:4px 0 12px}.danfossFanHead{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px}.danfossFanHead b{font-size:18px;color:#9ed4ff}.danfossFan input{width:100%;accent-color:#078ee6}.danfossAuto,.danfossOff{margin-top:8px}.danfossOff{border-color:#8a4650}`;
         ui.appendChild(style);
       }
+    }
+    if (!this.shadowRoot.querySelector("style[data-status-icons]")) {
+      const style = document.createElement("style");
+      style.dataset.statusIcons = "";
+      style.textContent = `.filterHouseWarn .filterIcon rect{fill:#ff8a3d;stroke:#ffd0a8;stroke-width:2;filter:drop-shadow(0 0 8px #ff8a3d99)}.filterHouseWarn .filterIcon path{fill:none;stroke:#241308;stroke-width:3;stroke-linecap:round}.bypassCtl{text-decoration:none!important}.bypassIcon path{fill:none;stroke:#61788d;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}.bypassCtl.active .bypassIcon path{stroke:#63d8f2;filter:drop-shadow(0 0 6px #63d8f2)}.bypassCtl.clickable:hover .bypassIcon path{stroke:#eafaff}`;
+      this.shadowRoot.appendChild(style);
     }
   };
   var originalBind = Card.prototype._bindControls;
