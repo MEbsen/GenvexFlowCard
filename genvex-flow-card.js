@@ -203,10 +203,16 @@
       };
       panel.innerHTML = `<div class="boostSettingsTitle">BOOST INDSTILLINGER</div>${field(speed, "Boost hastighed")}${field(duration, "Boost l\xE6ngde")}`;
       row.insertAdjacentElement("afterend", panel);
+      const applyOpen = () => {
+        panel.classList.toggle("open", this._boostConfigOpen === true);
+        gear.classList.toggle("on", this._boostConfigOpen === true);
+        gear.setAttribute("aria-expanded", String(this._boostConfigOpen === true));
+      };
+      applyOpen();
       gear.addEventListener("click", (e) => {
         e.stopPropagation();
-        panel.classList.toggle("open");
-        gear.classList.toggle("on", panel.classList.contains("open"));
+        this._boostConfigOpen = !(this._boostConfigOpen === true);
+        applyOpen();
       });
       panel.querySelectorAll("[data-boost-entity]").forEach((input) => input.addEventListener("change", async (e) => {
         const value = Number(e.target.value);
