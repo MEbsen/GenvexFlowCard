@@ -424,7 +424,7 @@ Action: switch.${action}\u2026`;
   console.info("%c VENTILATION-FLOW-CARD %c " + CARD_VERSION, "background:#078ee6;color:white;padding:3px", "background:#333;color:white;padding:3px");
 
   // src/ventilation-flow-card.js
-  var CARD_VERSION2 = "1.1.0-dev.7";
+  var CARD_VERSION2 = "1.1.0-dev.8";
   var Card = customElements.get("genvex-flow-card");
   if (!Card) throw new Error("Ventilation Flow Card: card core did not register");
   var providerFor = (card) => createProvider(card);
@@ -444,7 +444,11 @@ Action: switch.${action}\u2026`;
   var originalState = Card.prototype.state;
   Card.prototype.state = function(entity, f = "\u2014") {
     const p = providerFor(this);
-    if (p.id === "danfoss_air" && entity === p.resolve("fan_speed", "sensor")) return String(p.normalizeFanLevel(entity));
+    if (p.id === "danfoss_air" && entity === p.resolve("fan_speed", "sensor")) {
+      const fan = p.resolve("fan_control", "fan"), fanState = String(this._hass?.states?.[fan]?.state || "").toLowerCase();
+      if (fan && fanState === "off") return "0";
+      return String(p.normalizeFanLevel(entity));
+    }
     return originalState.call(this, entity, f);
   };
   var originalRender = Card.prototype.render;
@@ -479,20 +483,29 @@ Action: switch.${action}\u2026`;
           }
         };
       }
-      const fan = p.resolve("fan_control", "fan"), mode = p.resolve("operation_mode", "select"), ui = this.shadowRoot.querySelector(".ui"), steps = this.shadowRoot.querySelector(".steps"), level = this.shadowRoot.querySelector(".level");
+      const fan = p.resolve("fan_control", "fan"), mode = p.resolve("operation_mode", "select"), ui = this.shadowRoot.querySelector(".ui"), steps = this.shadowRoot.querySelector(".steps"), level = this.shadowRoot.querySelector(".level"), fanState = String(this._hass?.states?.[fan]?.state || "").toLowerCase(), fanOn = !!fan && fanState !== "off" && fanState !== "unavailable" && fanState !== "unknown";
       if (fan && steps) {
-        const pct = Math.round(p.fanPercentage(fan));
-        steps.outerHTML = `<div class="danfossFan"><div class="danfossFanHead"><span>Ventilator</span><b data-fanpct>${pct}%</b></div><input data-fanslider type="range" min="10" max="100" step="10" value="${Math.max(10, pct || 10)}"></div>`;
+        const pct = fanOn ? Math.round(p.fanPercentage(fan)) : 0;
+        steps.outerHTML = `<div class="danfossFan"><div class="danfossFanHead"><span>Ventilator</span><b data-fanpct>${pct}%</b></div><input data-fanslider type="range" min="0" max="100" step="10" value="${pct}"></div>`;
         if (level) level.style.display = "none";
         const slider = this.shadowRoot.querySelector("[data-fanslider]"), out = this.shadowRoot.querySelector("[data-fanpct]");
         slider?.addEventListener("input", (e) => {
           if (out) out.textContent = `${e.target.value}%`;
         });
-        slider?.addEventListener("change", (e) => p.setFanPercentage(fan, e.target.value));
+        slider?.addEventListener("change", (e) => {
+          const value = Number(e.target.value);
+          if (value <= 0) p.turnFanOff(fan);
+          else p.setFanPercentage(fan, value);
+        });
+      }
+      const coreFan = this.shadowRoot.querySelector(".fan"), miniFan = this.shadowRoot.querySelector(".miniFan");
+      if (!fanOn) {
+        if (coreFan) coreFan.style.animationPlayState = "paused";
+        if (miniFan) miniFan.style.animationPlayState = "paused";
       }
       const boost = this.shadowRoot.querySelector(".boost");
       if (boost) {
-        boost.insertAdjacentHTML("afterend", `<button class="boost danfossAuto" ${mode ? "" : "disabled"}>AUTO</button><button class="boost danfossOff" ${fan ? "" : "disabled"}>SLUK</button>`);
+        boost.insertAdjacentHTML("afterend", `<button class="boost danfossAuto" ${mode ? "" : "disabled"}>AUTO</button><button class="boost danfossOff ${!fanOn ? "on" : ""}" ${fan ? "" : "disabled"}>SLUK</button>`);
         const autoBtn = this.shadowRoot.querySelector(".danfossAuto"), offBtn = this.shadowRoot.querySelector(".danfossOff");
         offBtn?.addEventListener("click", (e) => {
           e.stopPropagation();
