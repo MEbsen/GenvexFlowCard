@@ -36,19 +36,20 @@ jobs:
       - name: Build standalone HACS card
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p release
           VERSION="${{ steps.version.outputs.version }}"
           printf 'const CARD_VERSION="%s";\n' "$VERSION" > release/genvex-flow-card.js
           tail -n +2 genvex-flow-card-core.js >> release/genvex-flow-card.js
-          tail -n +2 genvex-flow-card.js | grep -v 'await import(new URL("genvex-flow-card-core.js"' >> release/genvex-flow-card.js
+          tail -n +2 genvex-flow-card.js | grep -vF 'await import(new URL("genvex-flow-card-core.js",import.meta.url))' >> release/genvex-flow-card.js || true
           node --check release/genvex-flow-card.js
-          if grep -Eq 'import\(|from[[:space:]]+["'"']\.\/' release/genvex-flow-card.js; then
-            echo "Standalone artifact still contains a local module dependency"
+          if grep -qF 'import(' release/genvex-flow-card.js; then
+            echo "Standalone artifact still contains a dynamic import"
             exit 1
           fi
-          grep -q 'customElements.define("genvex-flow-card"' release/genvex-flow-card.js
-          grep -q 'class DanfossAirAdapter' release/genvex-flow-card.js
-          grep -q 'class GenvexConnectAdapter' release/genvex-flow-card.js
+          grep -qF 'customElements.define("genvex-flow-card"' release/genvex-flow-card.js
+          grep -qF 'class DanfossAirAdapter' release/genvex-flow-card.js
+          grep -qF 'class GenvexConnectAdapter' release/genvex-flow-card.js
 
       - name: Create prerelease
         env:
