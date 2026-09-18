@@ -1,19 +1,26 @@
 name: Validate
-
 on:
   push:
     branches: [main, dev]
   pull_request:
     branches: [main]
-
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Check required HACS files
         run: |
           test -f hacs.json
-          test -f genvex-flow-card.js
           test -f README.md
-          node --check genvex-flow-card.js
+          test -f src/ventilation-flow-card.js
+          test -f src/providers/base.js
+          test -f src/providers/genvex-connect.js
+          test -f src/providers/danfoss-air.js
+      - name: Build and smoke test release artifact
+        run: |
+          npm install --no-audit --no-fund
+          npm run check
