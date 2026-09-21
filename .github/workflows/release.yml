@@ -13,13 +13,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create release artifact
+
+      - name: Validate stable release tag
+        shell: bash
         run: |
-          mkdir release
-          cp genvex-flow-card.js release/
+          TAG="${GITHUB_REF_NAME}"
+          echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install build dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build and smoke test standalone card
+        run: npm run check
+
+      - name: Verify release version and create artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          SOURCE_VERSION=$(sed -n 's/^const CARD_VERSION="\([^"]*\)";/\1/p' src/ventilation-flow-card.js)
+          test "$SOURCE_VERSION" = "$VERSION"
+          mkdir -p release
+          cp dist/genvex-flow-card.js release/genvex-flow-card.js
+          node scripts/smoke-test.mjs release/genvex-flow-card.js
           cd release
           zip genvex-flow-card.zip genvex-flow-card.js
+
       - uses: softprops/action-gh-release@v2
         with:
-          files: |\n            release/genvex-flow-card.js\n            release/genvex-flow-card.zip
+          files: |
+            release/genvex-flow-card.js
+            release/genvex-flow-card.zip
           generate_release_notes: true
