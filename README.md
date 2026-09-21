@@ -1,54 +1,185 @@
-# Genvex Flow Card\n\n## Preview\n\n![Ventilation Flow Card preview](https://placehold.co/1200x760/061525/83a4c4?text=Ventilation+Flow+Card+preview)\n\n> Preview placeholder. This will be replaced by a current screenshot of the card as the visual implementation matures.
+# Ventilation Flow Card
 
-Responsive animated Home Assistant Lovelace card for visualising a heat-recovery ventilation system.
+[![Validate](https://github.com/MEbsen/GenvexFlowCard/actions/workflows/validate.yml/badge.svg)](https://github.com/MEbsen/GenvexFlowCard/actions/workflows/validate.yml)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?logo=home-assistant-community-store)](https://hacs.xyz/docs/faq/custom_repositories/)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-18BCF2.svg?logo=homeassistant&logoColor=white)](https://www.home-assistant.io/)
+[![MIT License](https://img.shields.io/github/license/MEbsen/GenvexFlowCard)](LICENSE)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=000)](https://buymeacoffee.com/mebsen)
 
-## Project status
+A responsive, animated Home Assistant dashboard card for heat-recovery ventilation systems. Ventilation Flow Card turns ventilation entities into a visual representation of the house, airflow, temperatures, heat recovery and the controls supported by the selected system.
 
-Version 1.0.0 is the first stable release candidate. Stable code lives on `main`; current work continues on `dev`.
+The card started as Genvex Flow Card and has evolved into a provider-based card. Existing Genvex configurations remain compatible.
 
-### Branches
+> **Unofficial project:** Ventilation Flow Card is an independent community project. It is not affiliated with, endorsed by, or sponsored by Genvex, Danfoss or other ventilation manufacturers.
 
-- `main` — stable/release-ready builds used for normal HACS installation.
-- `dev` — development builds and visual iteration.
+## Preview
 
-Development versions use a suffix such as `0.3.1-dev.1`. Stable releases use semantic versions such as `1.0.0`.
+![Ventilation Flow Card preview](docs/ventilation-flow-card-preview.png)
 
-## HACS
+*Genvex Connect shown. The controls and status information displayed by the card depend on the capabilities exposed by the selected Home Assistant integration.*
 
-Add this repository to HACS as a custom **Dashboard** repository.
+## Highlights
 
-The distributed resource is:
+- Animated four-way airflow visualization.
+- Temperature-driven airflow colours.
+- Heat-recovery efficiency display.
+- Fan speed visualization and control where supported.
+- Fan RPM display and RPM-driven animation where available.
+- Boost control with speed/duration settings when exposed by the provider.
+- Bypass status and control where supported.
+- Filter status, warning and reset handling.
+- Humidity and operating-status information.
+- Provider-based architecture for multiple ventilation integrations.
+- Visual Home Assistant card editor.
+- Responsive SVG layout.
+- Existing `custom:genvex-flow-card` configurations remain supported.
 
-`genvex-flow-card.js`
+## Supported providers
 
-Basic card configuration:
+| Provider | Status | Fan control | Boost | Bypass | Filter | RPM |
+| --- | --- | --- | --- | --- | --- | --- |
+| Genvex Connect | Supported | Steps | Yes | When exposed | Days / calculated fallback | When exposed |
+| Danfoss Air | Supported | 0–100% | Yes | Yes | Remaining % | Supply / exhaust |
+
+Support depends on the entities and capabilities exposed by the Home Assistant integration and the ventilation unit itself.
+
+The provider architecture is designed so additional systems can be added by mapping their Home Assistant entities and capabilities rather than implementing a separate card UI.
+
+## Requirements
+
+- Home Assistant with a supported ventilation integration.
+- At least one supported provider available in Home Assistant.
+- JavaScript modules enabled for Lovelace resources.
+
+Ventilation Flow Card communicates only with Home Assistant. It does not connect directly to the physical ventilation unit.
+
+## Installation with HACS
+
+[![Open your Home Assistant instance and add this repository to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MEbsen&repository=GenvexFlowCard&category=plugin)
+
+Use the button above for one-click setup, or add it manually:
+
+1. Open **HACS → Frontend**.
+2. Open the menu and choose **Custom repositories**.
+3. Add `https://github.com/MEbsen/GenvexFlowCard`.
+4. Select category **Dashboard** and add the repository.
+5. Install **Ventilation Flow Card**.
+6. Reload Home Assistant in the browser.
+
+HACS normally creates the Lovelace resource automatically. If it does not, add:
+
+```text
+/hacsfiles/GenvexFlowCard/genvex-flow-card.js
+```
+
+Resource type: **JavaScript module**.
+
+## Card configuration
+
+Add **Custom: Ventilation Flow Card** from Home Assistant's card picker and select the integration/provider in the visual editor.
+
+### YAML example
 
 ```yaml
 type: custom:genvex-flow-card
 title: Ventilation
 height: 720
+provider: genvex_connect
 ```
 
-The `height` option controls the card's rendered height. The SVG uses a fixed viewBox with `preserveAspectRatio="xMidYMid meet"` so the complete scene remains visible while scaling.
+The historical card type `custom:genvex-flow-card` is intentionally retained for backwards compatibility.
 
-## Development workflow
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `type` | string | required | Must remain `custom:genvex-flow-card`. |
+| `provider` | string | `genvex_connect` | Ventilation provider. Currently `genvex_connect` or `danfoss_air`. |
+| `ventilation_entity` | string | auto / optional | Entity used to anchor provider discovery when applicable. |
+| `genvex_entity` | string | legacy / optional | Existing Genvex configurations remain supported. |
+| `filter_interval_days` | number | `180` | Genvex fallback filter interval when the integration does not provide a usable interval. |
+| `title` | string | `Ventilation` | Card title. |
+| `height` | number | `720` | Rendered card height in pixels. |
 
-1. Development is committed to `dev`.
-2. Test development builds in Home Assistant.
-3. Promote tested code to `main`.
-4. Tag stable versions as `vX.Y.Z`.
-5. GitHub Actions validates JavaScript and required HACS files. Tagged versions produce a GitHub release artifact.
+## How providers work
 
-## Design goals
+A provider maps the entities exposed by a Home Assistant ventilation integration to common card capabilities such as:
 
-- A visual explanation of the ventilation system rather than an entity list.
-- Four physically correct animated airflow paths.
-- Temperature-driven flow colours.
-- Fan level represented by both rotation speed and a numeric level.
-- Responsive SVG scene suitable for a normal card or a full-dashboard layout.
-- Visual status for heat recovery, humidity, filter and operating modes.
-- No direct communication with the ventilation unit; Home Assistant entities are the data source.
+- outside, supply, extract and exhaust temperatures;
+- fan status and fan control;
+- supply and exhaust RPM;
+- boost and optional boost settings;
+- bypass;
+- filter state;
+- humidity, defrost, heating and other operating states.
+
+The card renders controls from those capabilities. A provider therefore does not need its own separate visual design.
+
+This architecture also allows systems to expose only the features they actually support: unavailable capabilities are omitted rather than simulated.
+
+## Genvex Connect
+
+Genvex Connect remains fully backwards compatible with the original Genvex Flow Card.
+
+The card can use the integration's fan level, temperatures, operating states, boost and filter entities. When no usable filter interval is available, the configurable `filter_interval_days` value is used as a fallback.
+
+## Danfoss Air
+
+Danfoss Air support includes automatic entity discovery for the supported Home Assistant entities, percentage fan control, AUTO/OFF operation, Boost, writable bypass, remaining-filter percentage and supply/exhaust RPM when those entities are exposed.
+
+The exact feature set can vary with the unit and Home Assistant integration.
+
+## Troubleshooting
+
+### The card is not listed
+
+- Confirm that the repository was added to HACS as category **Dashboard**.
+- Confirm that `genvex-flow-card.js` exists as a JavaScript module resource.
+- Reload the browser without cache after installing or updating.
+
+### The old version is still shown
+
+1. Select **Redownload** on the Ventilation Flow Card page in HACS.
+2. Reload Home Assistant without browser cache.
+3. Check the version written to the browser console by Ventilation Flow Card.
+
+### A control or value is missing
+
+The card only shows capabilities it can resolve from the selected provider. Confirm that the relevant entity exists, is enabled and is available in Home Assistant.
+
+When reporting a provider mapping problem, include the card version and the relevant entity IDs/states.
+
+## Development
+
+Stable code lives on `main`; active development lives on `dev`.
+
+The distributed HACS resource is a single standalone JavaScript file, while provider implementations are maintained as modules under `src/providers/`.
+
+```bash
+npm install
+npm run check
+```
+
+The check command builds the standalone bundle and runs the smoke tests.
+
+Pull requests, provider contributions and reproducible bug reports are welcome.
+
+## Roadmap
+
+- Add more ventilation providers using the common capability model.
+- Continue moving provider-specific presentation logic into capability-based rendering.
+- Expand provider/device test coverage.
+- Improve automatic entity discovery where integrations expose multiple ventilation devices.
+- Add additional screenshots as provider implementations are validated.
+
+## Support
+
+If Ventilation Flow Card is useful to you, you can support its continued development by [buying me a coffee](https://buymeacoffee.com/mebsen).
+
+Contributions are entirely optional; the card remains free and open source.
+
+## Trademark notice
+
+Ventilation Flow Card is an independent, unofficial open-source project and is not affiliated with, endorsed by, or sponsored by Genvex, Danfoss or other ventilation manufacturers. Product and company names are trademarks of their respective owners and are used only to describe compatibility.
 
 ## License
 
-MIT
+[MIT](LICENSE)
