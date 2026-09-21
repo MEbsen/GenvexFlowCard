@@ -160,6 +160,12 @@ npm run check
 
 The check command builds the standalone bundle and runs the smoke tests.
 
+### Automated releases
+
+Development prereleases are created automatically from `dev`. Stable releases are created from `main`: finish and validate all changes, update `CARD_VERSION` in `src/ventilation-flow-card.js`, and make the final version commit with the exact message `Release vX.Y.Z`.
+
+GitHub Actions then builds and smoke-tests the standalone card, validates HACS compatibility, creates the matching tag and publishes both `genvex-flow-card.js` and `genvex-flow-card.zip`. Existing tags are never overwritten.
+
 Pull requests, provider contributions and reproducible bug reports are welcome.
 
 ## Roadmap
