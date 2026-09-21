@@ -1,7 +1,7 @@
 import { createProvider } from "./providers/index.js";
 import "./generated/legacy-card-core.js";
 
-const CARD_VERSION="1.1.0-dev.19";
+const CARD_VERSION="1.1.1";
 const Card=customElements.get("genvex-flow-card");
 if(!Card) throw new Error("Ventilation Flow Card: card core did not register");
 const providerFor=card=>createProvider(card);
