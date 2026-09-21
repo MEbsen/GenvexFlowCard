@@ -14,7 +14,7 @@ The card started as Genvex Flow Card and has evolved into a provider-based card.
 
 ## Preview
 
-![Ventilation Flow Card preview](ventilation-flow-card-previed.png)
+![Ventilation Flow Card preview](ventilation-flow-card-preview.png)
 
 *Genvex Connect shown. The controls and status information displayed by the card depend on the capabilities exposed by the selected Home Assistant integration.*
 
