@@ -2,27 +2,43 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   release:
+    if: startsWith(github.event.head_commit.message, 'Release v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Validate stable release tag
-        shell: bash
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Read and verify version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^const CARD_VERSION="\([^"]*\)";/\1/p' src/ventilation-flow-card.js)"
+          test -n "$version"
+          tag="v${version}"
+          echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+          if [ "${{ github.event.head_commit.message }}" != "Release ${tag}" ]; then
+            echo "Commit message must be exactly: Release ${tag}" >&2
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "Tag ${tag} already exists; refusing to overwrite it." >&2
+            exit 1
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
       - name: Install build dependencies
         run: npm install --no-audit --no-fund
@@ -30,22 +46,29 @@ jobs:
       - name: Build and smoke test standalone card
         run: npm run check
 
-      - name: Verify release version and create artifacts
+      - name: Validate HACS repository
+        uses: hacs/action@main
+        with:
+          category: plugin
+
+      - name: Create release artifacts
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          SOURCE_VERSION=$(sed -n 's/^const CARD_VERSION="\([^"]*\)";/\1/p' src/ventilation-flow-card.js)
-          test "$SOURCE_VERSION" = "$VERSION"
           mkdir -p release
           cp dist/genvex-flow-card.js release/genvex-flow-card.js
           node scripts/smoke-test.mjs release/genvex-flow-card.js
           cd release
           zip genvex-flow-card.zip genvex-flow-card.js
 
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            release/genvex-flow-card.js
-            release/genvex-flow-card.zip
-          generate_release_notes: true
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release create "$TAG" \
+            release/genvex-flow-card.js \
+            release/genvex-flow-card.zip \
+            --target "$GITHUB_SHA" \
+            --title "Ventilation Flow Card $TAG" \
+            --generate-notes
