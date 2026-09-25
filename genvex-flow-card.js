@@ -69,9 +69,19 @@
         filter_days_left: ["days left until filter change", "dage til filter skift"],
         filter_days: ["days since filter change", "dage siden filter skift", "filter days", "filterdage"],
         filter_days_setting: ["days between filter change", "dage mellem filter skift", "filter days setting", "filter interval"],
+        filter_months_setting: ["months between filter change", "m\xE5neder mellem filterskift", "filter months setting"],
         filter_reset: ["reset filter", "nulstil filter"],
         efficiency: ["efficiency", "virkningsgrad", "varmegenvinding"],
-        bypass_active: ["bypass"]
+        bypass_active: ["bypass"],
+        summer_mode: ["summer mode", "sommerdrift"],
+        defrost_active: ["defrost active", "afrimning aktiv"],
+        reheat_active: ["reheat active", "eftervarme aktiv"],
+        fan_rpm_supply: ["fan rpm supply", "supply fan rpm", "indbl\xE6sning rpm"],
+        fan_rpm_extract: ["fan rpm extract", "extract fan rpm", "udsugning rpm"],
+        cts400_humidity_low_level: ["low humidity %", "lav luftfugtighed %"],
+        cts400_humidity_low_step: ["low humidity fan level", "lav luftfugtighed trin"],
+        cts400_humidity_high_step: ["high humidity fan level", "h\xF8j luftfugtighed trin"],
+        cts400_humidity_high_max_time: ["high humidity level timeout", "h\xF8j luftfugtighed trin timeout"]
       };
       for (const m of this.registry) {
         if (deviceId && m.device_id !== deviceId) continue;
@@ -222,6 +232,60 @@
           }));
         }
       }
+      const humidityLow = p.resolve("cts400_humidity_low_level", "number"), humidityLowStep = p.resolve("cts400_humidity_low_step", "select"), humidityHighStep = p.resolve("cts400_humidity_high_step", "select"), humidityMaxTime = p.resolve("cts400_humidity_high_max_time", "number");
+      if (humidityLow || humidityLowStep || humidityHighStep || humidityMaxTime) {
+        const ui2 = root.querySelector(".ui");
+        if (ui2 && !root.querySelector(".humiditySettingsRow")) {
+          const row = document.createElement("div");
+          row.className = "humiditySettingsRow";
+          const button = document.createElement("button");
+          button.className = "humidityConfig";
+          button.type = "button";
+          button.innerHTML = '<span>Fugtstyring</span><span aria-hidden="true">\u2699</span>';
+          button.setAttribute("aria-label", "Fugtstyring indstillinger");
+          row.appendChild(button);
+          const panel = document.createElement("div");
+          panel.className = "humiditySettings";
+          const numberField = (id, label) => {
+            if (!id) return "";
+            const st = this._hass?.states?.[id], a = st?.attributes || {}, value = st?.state ?? "", min = Number.isFinite(Number(a.min)) ? `min="${a.min}"` : "", max = Number.isFinite(Number(a.max)) ? `max="${a.max}"` : "", step = Number.isFinite(Number(a.step)) ? `step="${a.step}"` : 'step="1"', unit = a.unit_of_measurement || "";
+            return `<label>${label}<span><input type="number" data-humidity-number="${id}" ${min} ${max} ${step} value="${value}"><em>${unit}</em></span></label>`;
+          };
+          const selectField = (id, label) => {
+            if (!id) return "";
+            const st = this._hass?.states?.[id], options = st?.attributes?.options || [];
+            return `<label>${label}<select data-humidity-select="${id}">${options.map((option) => `<option value="${option}" ${String(option) === String(st?.state) ? "selected" : ""}>${option}</option>`).join("")}</select></label>`;
+          };
+          panel.innerHTML = `<div class="humiditySettingsTitle">FUGTSTYRING</div>${numberField(humidityLow, "Lav fugtgr\xE6nse")}${selectField(humidityLowStep, "Trin ved lav fugt")}${selectField(humidityHighStep, "Trin ved h\xF8j fugt")}${numberField(humidityMaxTime, "Maks. tid ved h\xF8j fugt")}`;
+          const firstSeparator = ui2.querySelector(".sep");
+          if (firstSeparator) {
+            firstSeparator.insertAdjacentElement("beforebegin", row);
+            row.insertAdjacentElement("afterend", panel);
+          } else {
+            ui2.append(row, panel);
+          }
+          const applyHumidity = () => {
+            const open = this._humidityConfigOpen === true;
+            panel.classList.toggle("open", open);
+            button.classList.toggle("on", open);
+            button.setAttribute("aria-expanded", String(open));
+          };
+          applyHumidity();
+          button.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this._humidityConfigOpen = !(this._humidityConfigOpen === true);
+            applyHumidity();
+          });
+          panel.querySelectorAll("[data-humidity-number]").forEach((input) => input.addEventListener("change", async (e) => {
+            const value = Number(e.target.value);
+            if (!Number.isFinite(value)) return;
+            await this._hass.callService("number", "set_value", { entity_id: e.target.dataset.humidityNumber, value });
+          }));
+          panel.querySelectorAll("[data-humidity-select]").forEach((select) => select.addEventListener("change", async (e) => {
+            await this._hass.callService("select", "select_option", { entity_id: e.target.dataset.humiditySelect, option: e.target.value });
+          }));
+        }
+      }
       const ui = root.querySelector(".ui"), drift = [...ui?.querySelectorAll("h3") || []].find((h) => h.textContent.trim() === "DRIFT");
       if (drift && !root.querySelector(".driftAccordion")) {
         const body = document.createElement("div");
@@ -286,7 +350,7 @@
       if (!root.querySelector("style[data-persistent-ui]")) {
         const style = document.createElement("style");
         style.dataset.persistentUi = "";
-        style.textContent = `.boostSettingsRow{display:grid;grid-template-columns:1fr 42px;gap:6px;margin-top:12px}.boostSettingsRow>.boost{margin-top:0}.boostConfig{border:1px solid #285777;background:#0b2033;color:#dcefff;border-radius:10px;cursor:pointer;font-size:18px;line-height:1}.boostConfig:hover,.boostConfig.on{background:#15527d;border-color:#4b83aa}.boostSettings{display:none;margin-top:7px;padding:10px;border:1px solid #244866;border-radius:10px;background:#081a29}.boostSettings.open{display:grid;gap:9px}.boostSettingsTitle{color:#9db7ca;font-size:10px;font-weight:700;letter-spacing:.08em}.boostSettings label{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:#cfe2f2}.boostSettings label span{display:flex;align-items:center;gap:5px}.boostSettings input{width:68px;box-sizing:border-box;border:1px solid #355b78;border-radius:7px;background:#102b42;color:#eaf6ff;padding:5px}.boostSettings em{min-width:20px;color:#7f9db5;font-size:10px;font-style:normal}.accordionHead{display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;padding:2px 0}.accordionHead:hover{color:#cfe8fa}.driftAccordion{display:none}.driftAccordion.open{display:block}`;
+        style.textContent = `.boostSettingsRow{display:grid;grid-template-columns:1fr 42px;gap:6px;margin-top:12px}.boostSettingsRow>.boost{margin-top:0}.boostConfig,.humidityConfig{border:1px solid #285777;background:#0b2033;color:#dcefff;border-radius:10px;cursor:pointer;font-size:18px;line-height:1}.boostConfig:hover,.boostConfig.on,.humidityConfig:hover,.humidityConfig.on{background:#15527d;border-color:#4b83aa}.boostSettings,.humiditySettings{display:none;margin-top:7px;padding:10px;border:1px solid #244866;border-radius:10px;background:#081a29}.boostSettings.open,.humiditySettings.open{display:grid;gap:9px}.boostSettingsTitle,.humiditySettingsTitle{color:#9db7ca;font-size:10px;font-weight:700;letter-spacing:.08em}.boostSettings label,.humiditySettings label{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:#cfe2f2}.boostSettings label span,.humiditySettings label span{display:flex;align-items:center;gap:5px}.boostSettings input,.humiditySettings input,.humiditySettings select{width:68px;box-sizing:border-box;border:1px solid #355b78;border-radius:7px;background:#102b42;color:#eaf6ff;padding:5px}.boostSettings em,.humiditySettings em{min-width:20px;color:#7f9db5;font-size:10px;font-style:normal}.humiditySettingsRow{margin-top:8px}.humidityConfig{display:flex;align-items:center;justify-content:space-between;width:100%;padding:9px 11px;font-size:12px;font-weight:600}.accordionHead{display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;padding:2px 0}.accordionHead:hover{color:#cfe8fa}.driftAccordion{display:none}.driftAccordion.open{display:block}`;
         root.appendChild(style);
       }
     };
@@ -376,8 +440,8 @@
     }
     render() {
       if (!this.config || !this.shadowRoot) return;
-      const auto = { outside: this.entityByKey("temp_outside", "sensor"), supply: this.entityByKey("temp_supply", "sensor"), extract: this.entityByKey("temp_extract", "sensor"), exhaust: this.entityByKey("temp_exhaust", "sensor"), humidity: this.entityByKey("humidity", "sensor"), efficiency: this.entityByKey("efficiency", "sensor"), filter: this.entityByKey("filter_days_left", "sensor"), filterDays: this.entityByKey("filter_days", "sensor"), filterSetting: this.entityByKey("filter_days_setting", "number"), filterReset: this.entityByKey("filter_reset", "button"), fan: this.entityByKey("fan_speed", "select"), boost: this.config.boost || this.entityByKey("boost_enable", "switch"), bypass: this.entityByKey("bypass_active", "binary_sensor") };
-      let d = { o: this.num(auto.outside || this.config.outside_temperature), s: this.num(auto.supply || this.config.supply_temperature), x: this.num(auto.extract || this.config.extract_temperature), e: this.num(auto.exhaust || this.config.exhaust_temperature), h: this.num(auto.humidity || this.config.humidity), eff: this.num(auto.efficiency || this.config.efficiency), filter: this.num(auto.filter || this.config.filter_days_left), filterDays: this.num(auto.filterDays), filterSetting: Number.isFinite(this.num(auto.filterSetting)) ? this.num(auto.filterSetting) : Number(this.config.filter_interval_days || NaN), level: String(this.state(auto.fan || this.config.fan_level, "0")), boost: this.state(auto.boost || this.config.boost, "off"), bypass: this.config.debug_bypass === "open" ? "on" : this.config.debug_bypass === "closed" ? "off" : this.state(auto.bypass || this.config.bypass, "off"), summer: this.state(this.config.summer_mode, "off"), defrost: this.state(this.config.defrost, "off"), reheat: this.state(this.config.reheat, "off") }, on = (v) => ["on", "true", "open", "active", "1"].includes(String(v).toLowerCase()), lvl = Math.max(0, Math.min(4, +d.level || 0)), speed = lvl === 0 ? 0 : { 1: 4.4, 2: 3.2, 3: 2.1, 4: 1.2 }[lvl] || 3.2, fanSpeed = lvl === 0 ? 0 : { 1: 4, 2: 2.8, 3: 1.8, 4: 0.9 }[lvl] || 2.8, calcEff = Number.isFinite(d.eff) ? d.eff : Number.isFinite(d.o) && Number.isFinite(d.s) && Number.isFinite(d.x) && Math.abs(d.x - d.o) > 0.5 ? Math.max(0, Math.min(100, (d.s - d.o) / (d.x - d.o) * 100)) : NaN, filterElapsed = Number.isFinite(d.filterDays) ? d.filterDays : Number.isFinite(d.filterSetting) && Number.isFinite(d.filter) ? Math.max(0, d.filterSetting - d.filter) : NaN, filterOverdue = Number.isFinite(filterElapsed) && Number.isFinite(d.filterSetting) && filterElapsed >= d.filterSetting, co = { o: this.tempColor(d.o), s: this.tempColor(d.s), x: this.tempColor(d.x), e: this.tempColor(d.e) }, found = !!(auto.outside || auto.supply || auto.extract || auto.exhaust || auto.fan), live = [auto.outside, auto.supply, auto.extract, auto.exhaust, auto.fan].filter(Boolean).some((id) => {
+      const auto = { outside: this.entityByKey("temp_outside", "sensor"), supply: this.entityByKey("temp_supply", "sensor"), extract: this.entityByKey("temp_extract", "sensor"), exhaust: this.entityByKey("temp_exhaust", "sensor"), humidity: this.entityByKey("humidity", "sensor"), efficiency: this.entityByKey("efficiency", "sensor"), filter: this.entityByKey("filter_days_left", "sensor"), filterDays: this.entityByKey("filter_days", "sensor"), filterSetting: this.entityByKey("filter_days_setting", "number"), filterMonthsSetting: this.entityByKey("filter_months_setting", "number"), filterReset: this.entityByKey("filter_reset", "button"), fan: this.entityByKey("fan_speed", "select"), boost: this.config.boost || this.entityByKey("boost_enable", "switch"), bypass: this.entityByKey("bypass_active", "binary_sensor"), summer: this.entityByKey("summer_mode", "binary_sensor"), defrost: this.entityByKey("defrost_active", "binary_sensor"), reheat: this.entityByKey("reheat_active", "binary_sensor") };
+      let d = { o: this.num(auto.outside || this.config.outside_temperature), s: this.num(auto.supply || this.config.supply_temperature), x: this.num(auto.extract || this.config.extract_temperature), e: this.num(auto.exhaust || this.config.exhaust_temperature), h: this.num(auto.humidity || this.config.humidity), eff: this.num(auto.efficiency || this.config.efficiency), filter: this.num(auto.filter || this.config.filter_days_left), filterDays: this.num(auto.filterDays), filterSetting: Number(this.config.filter_interval_days) > 0 ? Number(this.config.filter_interval_days) : Number.isFinite(this.num(auto.filterSetting)) ? this.num(auto.filterSetting) : Number.isFinite(this.num(auto.filterMonthsSetting)) ? this.num(auto.filterMonthsSetting) * 30.4375 : NaN, level: String(this.state(auto.fan || this.config.fan_level, "0")), boost: this.state(auto.boost || this.config.boost, "off"), bypass: this.config.debug_bypass === "open" ? "on" : this.config.debug_bypass === "closed" ? "off" : this.state(auto.bypass || this.config.bypass, "off"), summer: this.state(auto.summer || this.config.summer_mode, "off"), defrost: this.state(auto.defrost || this.config.defrost, "off"), reheat: this.state(auto.reheat || this.config.reheat, "off") }, on = (v) => ["on", "true", "open", "active", "1"].includes(String(v).toLowerCase()), lvl = Math.max(0, Math.min(4, +d.level || 0)), speed = lvl === 0 ? 0 : { 1: 4.4, 2: 3.2, 3: 2.1, 4: 1.2 }[lvl] || 3.2, fanSpeed = lvl === 0 ? 0 : { 1: 4, 2: 2.8, 3: 1.8, 4: 0.9 }[lvl] || 2.8, calcEff = Number.isFinite(d.eff) ? d.eff : Number.isFinite(d.o) && Number.isFinite(d.s) && Number.isFinite(d.x) && Math.abs(d.x - d.o) > 0.5 ? Math.max(0, Math.min(100, (d.s - d.o) / (d.x - d.o) * 100)) : NaN, filterElapsed = Number.isFinite(d.filterDays) ? d.filterDays : Number.isFinite(d.filterSetting) && Number.isFinite(d.filter) ? Math.max(0, d.filterSetting - d.filter) : NaN, filterOverdue = Number.isFinite(d.filter) && d.filter <= 0 || Number.isFinite(filterElapsed) && Number.isFinite(d.filterSetting) && filterElapsed >= d.filterSetting, co = { o: this.tempColor(d.o), s: this.tempColor(d.s), x: this.tempColor(d.x), e: this.tempColor(d.e) }, found = !!(auto.outside || auto.supply || auto.extract || auto.exhaust || auto.fan), live = [auto.outside, auto.supply, auto.extract, auto.exhaust, auto.fan].filter(Boolean).some((id) => {
         const st = this._hass?.states?.[id];
         return st && !["unknown", "unavailable", ""].includes(String(st.state).toLowerCase());
       });
@@ -563,7 +627,7 @@ Action: switch.${action}\u2026`;
   console.info("%c VENTILATION-FLOW-CARD %c " + CARD_VERSION, "background:#078ee6;color:white;padding:3px", "background:#333;color:white;padding:3px");
 
   // src/ventilation-flow-card.js
-  var CARD_VERSION2 = "1.1.0-dev.19";
+  var CARD_VERSION2 = "1.1.2-dev.1";
   var Card = customElements.get("genvex-flow-card");
   if (!Card) throw new Error("Ventilation Flow Card: card core did not register");
   var providerFor = (card) => createProvider(card);
@@ -628,6 +692,19 @@ Action: switch.${action}\u2026`;
     txt.textContent = `(${Math.round(rpm).toLocaleString("da-DK")} RPM)`;
     temp.after(txt);
   };
+  var applyRpm = (card, supplyRpm, exhaustRpm, fanOn, fallbackPct) => {
+    addRpmLabel(card.shadowRoot, "INDBL\xC6SNING", supplyRpm);
+    addRpmLabel(card.shadowRoot, "UDSUGNING", exhaustRpm);
+    const rpms = [supplyRpm, exhaustRpm].filter(Number.isFinite), rpmAvg = rpms.length ? rpms.reduce((a, b) => a + b, 0) / rpms.length : NaN, rpmPct = Number.isFinite(rpmAvg) && rpmAvg > 0 ? Math.max(5, Math.min(100, rpmAvg / 30)) : fallbackPct, animPct = fanOn ? rpmPct : 0, flowDuration = animPct <= 0 ? 0 : Math.max(0.55, 7.5 - Math.pow(animPct / 100, 0.55) * 6.95), rotorDuration = animPct <= 0 ? 0 : Math.max(0.45, 5.5 - Math.pow(animPct / 100, 0.6) * 5.05);
+    card.shadowRoot.querySelectorAll(".dots").forEach((el) => {
+      el.style.animationDuration = `${flowDuration || 1}s`;
+      el.style.animationPlayState = fanOn ? "running" : "paused";
+    });
+    card.shadowRoot.querySelectorAll(".fanRotor,.miniFan").forEach((el) => {
+      el.style.animationDuration = `${rotorDuration || 1}s`;
+      el.style.animationPlayState = fanOn ? "running" : "paused";
+    });
+  };
   var originalRender = Card.prototype.render;
   Card.prototype.render = function() {
     originalRender.call(this);
@@ -635,6 +712,10 @@ Action: switch.${action}\u2026`;
     const p = providerFor(this), status = this.shadowRoot.querySelector(".status b");
     if (status) status.textContent = p.label + (p.experimental ? " \xB7 Experimental" : "");
     iconifyStatus(this);
+    if (p.id === "genvex_connect") {
+      const supplyRpmEntity = p.resolve("fan_rpm_supply", "sensor"), exhaustRpmEntity = p.resolve("fan_rpm_extract", "sensor"), supplyRpm = Number(this._hass?.states?.[supplyRpmEntity]?.state), exhaustRpm = Number(this._hass?.states?.[exhaustRpmEntity]?.state), fan = p.resolve("fan_speed", "select"), level = Number(this._hass?.states?.[fan]?.state), rpms = [supplyRpm, exhaustRpm].filter(Number.isFinite), fanOn = rpms.some((rpm) => rpm > 0) || Number.isFinite(level) && level > 0;
+      applyRpm(this, supplyRpm, exhaustRpm, fanOn, Number.isFinite(level) ? level * 25 : 0);
+    }
     if (p.id === "danfoss_air") {
       const filter = p.resolve("filter_remaining", "sensor"), box = this.shadowRoot.querySelector(".filterbox");
       if (filter && box) {
@@ -666,17 +747,7 @@ Action: switch.${action}\u2026`;
         };
       }
       const fan = p.resolve("fan_control", "fan"), mode = p.resolve("operation_mode", "select"), boostEntity = p.resolve("boost_enable", "switch"), supplyRpmEntity = p.resolve("supply_fan_rpm", "sensor"), exhaustRpmEntity = p.resolve("exhaust_fan_rpm", "sensor"), supplyRpm = Number(this._hass?.states?.[supplyRpmEntity]?.state), exhaustRpm = Number(this._hass?.states?.[exhaustRpmEntity]?.state), ui = this.shadowRoot.querySelector(".ui"), steps = this.shadowRoot.querySelector(".steps"), level = this.shadowRoot.querySelector(".level"), fanState = String(this._hass?.states?.[fan]?.state || "").toLowerCase(), fanOn = !!fan && fanState !== "off" && fanState !== "unavailable" && fanState !== "unknown", pct = fanOn ? Math.round(p.fanPercentage(fan)) : 0;
-      addRpmLabel(this.shadowRoot, "INDBL\xC6SNING", supplyRpm);
-      addRpmLabel(this.shadowRoot, "UDSUGNING", exhaustRpm);
-      const rpms = [supplyRpm, exhaustRpm].filter(Number.isFinite), rpmAvg = rpms.length ? rpms.reduce((a, b) => a + b, 0) / rpms.length : NaN, rpmPct = Number.isFinite(rpmAvg) && rpmAvg > 0 ? Math.max(5, Math.min(100, rpmAvg / 30)) : pct, animPct = fanOn ? rpmPct : 0, flowDuration = animPct <= 0 ? 0 : Math.max(0.55, 7.5 - Math.pow(animPct / 100, 0.55) * 6.95), rotorDuration = animPct <= 0 ? 0 : Math.max(0.45, 5.5 - Math.pow(animPct / 100, 0.6) * 5.05);
-      this.shadowRoot.querySelectorAll(".dots").forEach((el) => {
-        el.style.animationDuration = `${flowDuration || 1}s`;
-        el.style.animationPlayState = fanOn ? "running" : "paused";
-      });
-      this.shadowRoot.querySelectorAll(".fanRotor,.miniFan").forEach((el) => {
-        el.style.animationDuration = `${rotorDuration || 1}s`;
-        el.style.animationPlayState = fanOn ? "running" : "paused";
-      });
+      applyRpm(this, supplyRpm, exhaustRpm, fanOn, pct);
       if (fan && steps) {
         steps.outerHTML = `<div class="danfossFan"><div class="danfossFanHead"><span>Ventilator</span><b data-fanpct>${pct}%</b></div><input data-fanslider type="range" min="0" max="100" step="10" value="${pct}"></div>`;
         if (level) level.style.display = "none";
@@ -746,12 +817,12 @@ Action: switch.${action}\u2026`;
     render() {
       if (!this.shadowRoot) this.attachShadow({ mode: "open" });
       const c = this._config || {}, danfoss = c.provider === "danfoss_air", selected = c.ventilation_entity || c.genvex_entity || "";
-      this.shadowRoot.innerHTML = `<style>:host{display:block;padding:8px 0}.grid,.field{display:grid;gap:10px}.field{gap:5px}label{font-weight:600}select,input{width:100%;box-sizing:border-box;padding:10px}.hint{font-size:12px;color:var(--secondary-text-color)}</style><div class="grid"><div class="field"><label>Integration / provider</label><select data-provider><option value="genvex_connect" ${!danfoss ? "selected" : ""}>Genvex Connect</option><option value="danfoss_air" ${danfoss ? "selected" : ""}>Danfoss Air (experimental)</option></select></div><div class="field"><label>${danfoss ? "Danfoss Air entity (optional)" : "Genvex-anl\xE6g"}</label><ha-entity-picker data-entity value="${selected}" allow-custom-entity></ha-entity-picker><div class="hint">${danfoss ? "Danfoss entities findes automatisk." : "V\xE6lg \xE9n entity fra Genvex-anl\xE6gget."}</div></div>${danfoss ? "" : `<div class="field"><label>Filterinterval (dage)</label><input data-key="filter_interval_days" type="number" min="1" step="1" value="${c.filter_interval_days ?? c.filter_days ?? 180}"><div class="hint">Bruges som fallback til at beregne n\xE6ste filterskift, hvis Genvex ikke leverer et brugbart interval.</div></div>`}<div class="field"><label>Titel</label><input data-key="title" value="${c.title || ""}"></div><div class="field"><label>H\xF8jde (px)</label><input data-key="height" type="number" value="${c.height || 720}"></div></div>`;
+      this.shadowRoot.innerHTML = `<style>:host{display:block;padding:8px 0}.grid,.field{display:grid;gap:10px}.field{gap:5px}label{font-weight:600}select,input{width:100%;box-sizing:border-box;padding:10px}.hint{font-size:12px;color:var(--secondary-text-color)}</style><div class="grid"><div class="field"><label>Integration / provider</label><select data-provider><option value="genvex_connect" ${!danfoss ? "selected" : ""}>Genvex Connect</option><option value="danfoss_air" ${danfoss ? "selected" : ""}>Danfoss Air (experimental)</option></select></div><div class="field"><label>${danfoss ? "Danfoss Air entity (optional)" : "Genvex-anl\xE6g"}</label><ha-entity-picker data-entity value="${selected}" allow-custom-entity></ha-entity-picker><div class="hint">${danfoss ? "Danfoss entities findes automatisk." : "V\xE6lg \xE9n entity fra Genvex-anl\xE6gget."}</div></div>${danfoss ? "" : `<div class="field"><label>Filterinterval (dage)</label><input data-key="filter_interval_days" type="number" min="-1" step="1" value="${c.filter_interval_days ?? c.filter_days ?? -1}"><div class="hint">Brug -1 eller lad feltet v\xE6re tomt for at anvende intervallet fra Genvex Connect. En positiv v\xE6rdi overstyrer integrationen.</div></div>`}<div class="field"><label>Titel</label><input data-key="title" value="${c.title || ""}"></div><div class="field"><label>H\xF8jde (px)</label><input data-key="height" type="number" value="${c.height || 720}"></div></div>`;
       const picker = this.shadowRoot.querySelector("[data-entity]");
       if (picker) picker.hass = this._hass;
       this.shadowRoot.querySelector("[data-provider]")?.addEventListener("change", (e) => this._fire({ ...c, provider: e.target.value, ventilation_entity: "" }));
       this.shadowRoot.querySelectorAll("[data-key]").forEach((el) => el.addEventListener("change", (e) => {
-        const key = e.target.dataset.key, value = e.target.type === "number" ? Number(e.target.value) : e.target.value, next = { ...this._config, [key]: value };
+        const key = e.target.dataset.key, value = e.target.type === "number" ? e.target.value === "" ? -1 : Number(e.target.value) : e.target.value, next = { ...this._config, [key]: value };
         if (key === "filter_interval_days") next.filter_days = value;
         this._fire(next);
       }));
