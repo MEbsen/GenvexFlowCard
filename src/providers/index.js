@@ -26,9 +26,9 @@ queueMicrotask(()=>{
     const root=this.shadowRoot;if(!root||!this.config)return;
 
     // BOOST configuration: provider capability driven and persistent.
-    const p=createProvider(this),speed=p.resolve("boost_speed","number"),duration=p.resolve("boost_duration","number");
+    const model=createProvider(this).model(),speed=model.boost.speedEntity,duration=model.boost.durationEntity;
     if(speed||duration){
-      const boost=root.querySelector("button.boost:not(.danfossAuto):not(.danfossOff)");
+      const boost=root.querySelector("button.boost:not(.fanAuto):not(.fanOff):not(.danfossAuto):not(.danfossOff)");
       if(boost&&!root.querySelector(".boostSettingsRow")){
         const row=document.createElement("div");row.className="boostSettingsRow";
         boost.parentNode.insertBefore(row,boost);row.appendChild(boost);
@@ -40,17 +40,17 @@ queueMicrotask(()=>{
         const applyBoost=()=>{const open=this._boostConfigOpen===true;panel.classList.toggle("open",open);gear.classList.toggle("on",open);gear.setAttribute("aria-expanded",String(open))};
         applyBoost();
         gear.addEventListener("click",e=>{e.stopPropagation();this._boostConfigOpen=!(this._boostConfigOpen===true);applyBoost()});
-        panel.querySelectorAll("[data-boost-entity]").forEach(input=>input.addEventListener("change",async e=>{const value=Number(e.target.value);if(!Number.isFinite(value))return;await this._hass.callService("number","set_value",{entity_id:e.target.dataset.boostEntity,value})}));
+        panel.querySelectorAll("[data-boost-entity]").forEach(input=>input.addEventListener("change",async e=>{const value=Number(e.target.value);if(!Number.isFinite(value))return;await model.boost.setNumber(e.target.dataset.boostEntity,value)}));
       }
     }
 
     // CTS400 humidity regulation is configuration, not a daily control. Keep
     // it behind a capability-driven settings button like the Boost settings.
-    const humidityLow=p.resolve("cts400_humidity_low_level","number"),
-      humidityLowStep=p.resolve("cts400_humidity_low_step","select"),
-      humidityHighStep=p.resolve("cts400_humidity_high_step","select"),
-      humidityMaxTime=p.resolve("cts400_humidity_high_max_time","number");
-    if(humidityLow||humidityLowStep||humidityHighStep||humidityMaxTime){
+    const humidityLow=model.humidityControl.lowEntity,
+      humidityLowStep=model.humidityControl.lowStepEntity,
+      humidityHighStep=model.humidityControl.highStepEntity,
+      humidityMaxTime=model.humidityControl.maxTimeEntity;
+    if(model.capabilities.humidityControl){
       const ui=root.querySelector(".ui");
       if(ui&&!root.querySelector(".humiditySettingsRow")){
         const row=document.createElement("div");row.className="humiditySettingsRow";
@@ -63,8 +63,8 @@ queueMicrotask(()=>{
         if(firstSeparator){firstSeparator.insertAdjacentElement("beforebegin",row);row.insertAdjacentElement("afterend",panel)}else{ui.append(row,panel)}
         const applyHumidity=()=>{const open=this._humidityConfigOpen===true;panel.classList.toggle("open",open);button.classList.toggle("on",open);button.setAttribute("aria-expanded",String(open))};
         applyHumidity();button.addEventListener("click",e=>{e.stopPropagation();this._humidityConfigOpen=!(this._humidityConfigOpen===true);applyHumidity()});
-        panel.querySelectorAll("[data-humidity-number]").forEach(input=>input.addEventListener("change",async e=>{const value=Number(e.target.value);if(!Number.isFinite(value))return;await this._hass.callService("number","set_value",{entity_id:e.target.dataset.humidityNumber,value})}));
-        panel.querySelectorAll("[data-humidity-select]").forEach(select=>select.addEventListener("change",async e=>{await this._hass.callService("select","select_option",{entity_id:e.target.dataset.humiditySelect,option:e.target.value})}));
+        panel.querySelectorAll("[data-humidity-number]").forEach(input=>input.addEventListener("change",async e=>{const value=Number(e.target.value);if(!Number.isFinite(value))return;await model.humidityControl.setNumber(e.target.dataset.humidityNumber,value)}));
+        panel.querySelectorAll("[data-humidity-select]").forEach(select=>select.addEventListener("change",async e=>{await model.humidityControl.setOption(e.target.dataset.humiditySelect,e.target.value)}));
       }
     }
 

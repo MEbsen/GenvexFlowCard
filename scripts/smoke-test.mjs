@@ -10,6 +10,9 @@ for(const required of ["genvex-flow-card","Danfoss Air","Genvex Connect","VENTIL
 for(const capability of ["filter_months_setting","fan_rpm_supply","fan_rpm_extract","cts400_humidity_low_level","cts400_humidity_high_max_time"]){
   if(!source.includes(capability)) throw new Error(`Missing Genvex capability: ${capability}`);
 }
+for(const contract of ["controlMode","normalizedPercent","capabilities","Card v"]){
+  if(!source.includes(contract)) throw new Error(`Missing common provider-model contract: ${contract}`);
+}
 if(/import\s*\(/.test(source)||/^\s*import\s/m.test(source)) throw new Error("Bundle contains unresolved import");
 
 const registry=new Map();

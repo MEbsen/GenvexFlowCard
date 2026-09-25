@@ -101,6 +101,14 @@ The historical card type `custom:genvex-flow-card` is intentionally retained for
 
 ## How providers work
 
+```mermaid
+flowchart LR
+  G[Genvex Connect] --> M[Common data model]
+  D[Danfoss Air] --> M
+  F[Future provider] --> M
+  M --> C[SVG ventilation card]
+```
+
 A provider maps the entities exposed by a Home Assistant ventilation integration to common card capabilities such as:
 
 - outside, supply, extract and exhaust temperatures;
@@ -111,7 +119,9 @@ A provider maps the entities exposed by a Home Assistant ventilation integration
 - filter state;
 - humidity, defrost, heating and other operating states.
 
-The card renders controls from those capabilities. A provider therefore does not need its own separate visual design.
+The model normalizes entity references, values, capabilities and actions. For example, Genvex exposes fan speed as steps while Danfoss Air exposes a percentage; both are presented to the SVG card through the same fan model. The card renders controls from those capabilities, so a provider does not need its own separate visual design.
+
+The active provider and card version are shown in the card and in the visual editor. This makes screenshots and issue reports easier to identify.
 
 This architecture also allows systems to expose only the features they actually support: unavailable capabilities are omitted rather than simulated.
 

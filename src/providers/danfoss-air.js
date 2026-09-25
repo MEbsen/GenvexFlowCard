@@ -55,4 +55,27 @@ export class DanfossAirAdapter extends VentilationProviderAdapter {
     return this.hass.callService("fan","set_percentage",{entity_id:entityId,percentage:Number(percentage)});
   }
   turnFanOff(entityId) { return this.hass.callService("fan","turn_off",{entity_id:entityId}); }
+
+  entityMap() {
+    const entities=super.entityMap();
+    entities.fan_speed=this.resolve("fan_speed","sensor");
+    entities.bypass_active=this.resolve("bypass_active","switch");
+    return entities;
+  }
+
+  fanModel(entities) {
+    const controlEntity=entities.fan_control,percentage=this.fanPercentage(controlEntity),
+      supplyRpm=this.numeric(entities.fan_rpm_supply),extractRpm=this.numeric(entities.fan_rpm_extract),
+      state=String(this.hass?.states?.[controlEntity]?.state||"").toLowerCase(),running=Boolean(controlEntity)&&!["off","unavailable","unknown",""] .includes(state);
+    const modeEntity=entities.operation_mode,boostEntity=entities.boost_enable;
+    return {
+      controlMode:"percentage",controlEntity,displayEntity:entities.fan_speed,value:percentage,
+      displayValue:String(Math.round(percentage)),displayUnit:"%",normalizedPercent:percentage,
+      legacyLevel:this.normalizeFanLevel(entities.fan_speed),min:0,max:100,step:10,supplyRpm,extractRpm,running,
+      setValue:value=>Number(value)<=0?this.turnFanOff(controlEntity):this.setFanPercentage(controlEntity,value),
+      turnOff:async()=>{if(boostEntity&&["on","true","active","1"].includes(String(this.hass?.states?.[boostEntity]?.state||"").toLowerCase()))await this.hass.callService("switch","turn_off",{entity_id:boostEntity});return this.turnFanOff(controlEntity)},
+      setAuto:async()=>{const options=this.hass?.states?.[modeEntity]?.attributes?.options||[],option=options.find(value=>/auto/i.test(String(value)));if(option)return this.hass.callService("select","select_option",{entity_id:modeEntity,option});throw new Error(`AUTO option not found: ${options.join(", ")}`)},
+      autoAvailable:Boolean(modeEntity)
+    };
+  }
 }
