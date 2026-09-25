@@ -35,6 +35,84 @@
     get experimental() {
       return false;
     }
+    numeric(entityId) {
+      const value = Number(this.hass?.states?.[entityId]?.state);
+      return Number.isFinite(value) ? value : NaN;
+    }
+    entityMap() {
+      return {
+        temp_outside: this.resolve("temp_outside", "sensor"),
+        temp_supply: this.resolve("temp_supply", "sensor"),
+        temp_extract: this.resolve("temp_extract", "sensor"),
+        temp_exhaust: this.resolve("temp_exhaust", "sensor"),
+        humidity: this.resolve("humidity", "sensor"),
+        efficiency: this.resolve("efficiency", "sensor"),
+        fan_speed: this.resolve("fan_speed", "select"),
+        fan_control: this.resolve("fan_control", "fan"),
+        fan_rpm_supply: this.resolve("fan_rpm_supply", "sensor") || this.resolve("supply_fan_rpm", "sensor"),
+        fan_rpm_extract: this.resolve("fan_rpm_extract", "sensor") || this.resolve("exhaust_fan_rpm", "sensor"),
+        boost_enable: this.resolve("boost_enable", "switch"),
+        boost_speed: this.resolve("boost_speed", "number"),
+        boost_duration: this.resolve("boost_duration", "number"),
+        bypass_active: this.resolve("bypass_active", "binary_sensor") || this.resolve("bypass_active", "switch"),
+        filter_days_left: this.resolve("filter_days_left", "sensor"),
+        filter_days: this.resolve("filter_days", "sensor"),
+        filter_days_setting: this.resolve("filter_days_setting", "number"),
+        filter_months_setting: this.resolve("filter_months_setting", "number"),
+        filter_remaining: this.resolve("filter_remaining", "sensor"),
+        filter_reset: this.resolve("filter_reset", "button"),
+        summer_mode: this.resolve("summer_mode", "binary_sensor"),
+        defrost_active: this.resolve("defrost_active", "binary_sensor"),
+        reheat_active: this.resolve("reheat_active", "binary_sensor"),
+        operation_mode: this.resolve("operation_mode", "select"),
+        humidity_low: this.resolve("cts400_humidity_low_level", "number"),
+        humidity_low_step: this.resolve("cts400_humidity_low_step", "select"),
+        humidity_high_step: this.resolve("cts400_humidity_high_step", "select"),
+        humidity_max_time: this.resolve("cts400_humidity_high_max_time", "number")
+      };
+    }
+    fanModel(entities) {
+      const value = this.numeric(entities.fan_speed);
+      const level = Number.isFinite(value) ? Math.max(0, Math.min(4, Math.round(value))) : 0;
+      const supplyRpm = this.numeric(entities.fan_rpm_supply), extractRpm = this.numeric(entities.fan_rpm_extract);
+      return {
+        controlMode: "steps",
+        controlEntity: entities.fan_speed,
+        displayEntity: entities.fan_speed,
+        value: level,
+        displayValue: String(level),
+        displayUnit: "trin",
+        normalizedPercent: level * 25,
+        legacyLevel: level,
+        min: 0,
+        max: 4,
+        step: 1,
+        options: ["0", "1", "2", "3", "4"],
+        supplyRpm,
+        extractRpm,
+        running: [supplyRpm, extractRpm].some((rpm) => Number.isFinite(rpm) && rpm > 0) || level > 0,
+        setValue: (value2) => this.hass.callService("select", "select_option", { entity_id: entities.fan_speed, option: String(value2) })
+      };
+    }
+    model(cardVersion = "") {
+      const entities = this.entityMap(), fan = this.fanModel(entities);
+      const humidityEntities = [entities.humidity_low, entities.humidity_low_step, entities.humidity_high_step, entities.humidity_max_time];
+      return {
+        provider: { id: this.id, name: this.label, experimental: this.experimental },
+        card: { version: cardVersion },
+        entities,
+        fan,
+        boost: { entity: entities.boost_enable, speedEntity: entities.boost_speed, durationEntity: entities.boost_duration, setNumber: (entity, value) => this.hass.callService("number", "set_value", { entity_id: entity, value: Number(value) }) },
+        bypass: { entity: entities.bypass_active, controllable: Boolean(entities.bypass_active?.startsWith("switch.")), toggle: async () => {
+          const state = String(this.hass?.states?.[entities.bypass_active]?.state || "").toLowerCase();
+          return this.hass.callService("switch", state === "on" ? "turn_off" : "turn_on", { entity_id: entities.bypass_active });
+        } },
+        filter: { daysLeftEntity: entities.filter_days_left, daysEntity: entities.filter_days, daysSettingEntity: entities.filter_days_setting, monthsSettingEntity: entities.filter_months_setting, remainingPercentEntity: entities.filter_remaining, resetEntity: entities.filter_reset },
+        humidityControl: { available: humidityEntities.some(Boolean), lowEntity: entities.humidity_low, lowStepEntity: entities.humidity_low_step, highStepEntity: entities.humidity_high_step, maxTimeEntity: entities.humidity_max_time, setNumber: (entity, value) => this.hass.callService("number", "set_value", { entity_id: entity, value: Number(value) }), setOption: (entity, option) => this.hass.callService("select", "select_option", { entity_id: entity, option }) },
+        operating: { summerEntity: entities.summer_mode, defrostEntity: entities.defrost_active, reheatEntity: entities.reheat_active },
+        capabilities: { fanControl: Boolean(fan.controlEntity), fanRpm: [fan.supplyRpm, fan.extractRpm].some(Number.isFinite), boost: Boolean(entities.boost_enable), boostSettings: Boolean(entities.boost_speed || entities.boost_duration), bypass: Boolean(entities.bypass_active), bypassControl: Boolean(entities.bypass_active?.startsWith("switch.")), filter: Boolean(entities.filter_days_left || entities.filter_days || entities.filter_remaining), humidityControl: humidityEntities.some(Boolean) }
+      };
+    }
   };
 
   // src/providers/genvex-connect.js
@@ -168,6 +246,43 @@
     turnFanOff(entityId) {
       return this.hass.callService("fan", "turn_off", { entity_id: entityId });
     }
+    entityMap() {
+      const entities = super.entityMap();
+      entities.fan_speed = this.resolve("fan_speed", "sensor");
+      entities.bypass_active = this.resolve("bypass_active", "switch");
+      return entities;
+    }
+    fanModel(entities) {
+      const controlEntity = entities.fan_control, percentage = this.fanPercentage(controlEntity), supplyRpm = this.numeric(entities.fan_rpm_supply), extractRpm = this.numeric(entities.fan_rpm_extract), state = String(this.hass?.states?.[controlEntity]?.state || "").toLowerCase(), running = Boolean(controlEntity) && !["off", "unavailable", "unknown", ""].includes(state);
+      const modeEntity = entities.operation_mode, boostEntity = entities.boost_enable;
+      return {
+        controlMode: "percentage",
+        controlEntity,
+        displayEntity: entities.fan_speed,
+        value: percentage,
+        displayValue: String(Math.round(percentage)),
+        displayUnit: "%",
+        normalizedPercent: percentage,
+        legacyLevel: this.normalizeFanLevel(entities.fan_speed),
+        min: 0,
+        max: 100,
+        step: 10,
+        supplyRpm,
+        extractRpm,
+        running,
+        setValue: (value) => Number(value) <= 0 ? this.turnFanOff(controlEntity) : this.setFanPercentage(controlEntity, value),
+        turnOff: async () => {
+          if (boostEntity && ["on", "true", "active", "1"].includes(String(this.hass?.states?.[boostEntity]?.state || "").toLowerCase())) await this.hass.callService("switch", "turn_off", { entity_id: boostEntity });
+          return this.turnFanOff(controlEntity);
+        },
+        setAuto: async () => {
+          const options = this.hass?.states?.[modeEntity]?.attributes?.options || [], option = options.find((value) => /auto/i.test(String(value)));
+          if (option) return this.hass.callService("select", "select_option", { entity_id: modeEntity, option });
+          throw new Error(`AUTO option not found: ${options.join(", ")}`);
+        },
+        autoAvailable: Boolean(modeEntity)
+      };
+    }
   };
 
   // src/providers/index.js
@@ -189,9 +304,9 @@
       previousRender.call(this);
       const root = this.shadowRoot;
       if (!root || !this.config) return;
-      const p = createProvider(this), speed = p.resolve("boost_speed", "number"), duration = p.resolve("boost_duration", "number");
+      const model = createProvider(this).model(), speed = model.boost.speedEntity, duration = model.boost.durationEntity;
       if (speed || duration) {
-        const boost = root.querySelector("button.boost:not(.danfossAuto):not(.danfossOff)");
+        const boost = root.querySelector("button.boost:not(.fanAuto):not(.fanOff):not(.danfossAuto):not(.danfossOff)");
         if (boost && !root.querySelector(".boostSettingsRow")) {
           const row = document.createElement("div");
           row.className = "boostSettingsRow";
@@ -228,12 +343,12 @@
           panel.querySelectorAll("[data-boost-entity]").forEach((input) => input.addEventListener("change", async (e) => {
             const value = Number(e.target.value);
             if (!Number.isFinite(value)) return;
-            await this._hass.callService("number", "set_value", { entity_id: e.target.dataset.boostEntity, value });
+            await model.boost.setNumber(e.target.dataset.boostEntity, value);
           }));
         }
       }
-      const humidityLow = p.resolve("cts400_humidity_low_level", "number"), humidityLowStep = p.resolve("cts400_humidity_low_step", "select"), humidityHighStep = p.resolve("cts400_humidity_high_step", "select"), humidityMaxTime = p.resolve("cts400_humidity_high_max_time", "number");
-      if (humidityLow || humidityLowStep || humidityHighStep || humidityMaxTime) {
+      const humidityLow = model.humidityControl.lowEntity, humidityLowStep = model.humidityControl.lowStepEntity, humidityHighStep = model.humidityControl.highStepEntity, humidityMaxTime = model.humidityControl.maxTimeEntity;
+      if (model.capabilities.humidityControl) {
         const ui2 = root.querySelector(".ui");
         if (ui2 && !root.querySelector(".humiditySettingsRow")) {
           const row = document.createElement("div");
@@ -279,10 +394,10 @@
           panel.querySelectorAll("[data-humidity-number]").forEach((input) => input.addEventListener("change", async (e) => {
             const value = Number(e.target.value);
             if (!Number.isFinite(value)) return;
-            await this._hass.callService("number", "set_value", { entity_id: e.target.dataset.humidityNumber, value });
+            await model.humidityControl.setNumber(e.target.dataset.humidityNumber, value);
           }));
           panel.querySelectorAll("[data-humidity-select]").forEach((select) => select.addEventListener("change", async (e) => {
-            await this._hass.callService("select", "select_option", { entity_id: e.target.dataset.humiditySelect, option: e.target.value });
+            await model.humidityControl.setOption(e.target.dataset.humiditySelect, e.target.value);
           }));
         }
       }
@@ -627,31 +742,23 @@ Action: switch.${action}\u2026`;
   console.info("%c VENTILATION-FLOW-CARD %c " + CARD_VERSION, "background:#078ee6;color:white;padding:3px", "background:#333;color:white;padding:3px");
 
   // src/ventilation-flow-card.js
-  var CARD_VERSION2 = "1.1.2-dev.2";
+  var CARD_VERSION2 = "1.1.2-dev.3";
   var Card = customElements.get("genvex-flow-card");
   if (!Card) throw new Error("Ventilation Flow Card: card core did not register");
   var providerFor = (card) => createProvider(card);
+  var modelFor = (card) => providerFor(card).model(CARD_VERSION2);
   Card.prototype.selectedDeviceId = function() {
     const p = providerFor(this);
     return typeof p.selectedDeviceId === "function" ? p.selectedDeviceId() : null;
   };
   Card.prototype.entityByKey = function(key, domain) {
-    const p = providerFor(this);
-    if (p.id === "danfoss_air") {
-      if (key === "fan_speed") return p.resolve(key, "sensor");
-      if (key === "bypass_active") return p.resolve(key, "switch");
-      if (["filter_days_left", "filter_days", "filter_days_setting", "filter_reset", "efficiency"].includes(key)) return null;
-    }
-    return p.resolve(key, domain);
+    const p = providerFor(this), model = p.model(CARD_VERSION2);
+    return model.entities[key] || p.resolve(key, domain);
   };
   var originalState = Card.prototype.state;
   Card.prototype.state = function(entity, f = "\u2014") {
-    const p = providerFor(this);
-    if (p.id === "danfoss_air" && entity === p.resolve("fan_speed", "sensor")) {
-      const fan = p.resolve("fan_control", "fan"), fanState = String(this._hass?.states?.[fan]?.state || "").toLowerCase();
-      if (fan && fanState === "off") return "0";
-      return String(p.normalizeFanLevel(entity));
-    }
+    const model = modelFor(this);
+    if (entity && entity === model.fan.displayEntity && Number.isFinite(model.fan.legacyLevel)) return String(model.fan.legacyLevel);
     return originalState.call(this, entity, f);
   };
   var iconifyStatus = (card) => {
@@ -692,114 +799,98 @@ Action: switch.${action}\u2026`;
     txt.textContent = `(${Math.round(rpm).toLocaleString("da-DK")} RPM)`;
     temp.after(txt);
   };
-  var applyRpm = (card, supplyRpm, exhaustRpm, fanOn, fallbackPct) => {
-    addRpmLabel(card.shadowRoot, "INDBL\xC6SNING", supplyRpm);
-    addRpmLabel(card.shadowRoot, "UDSUGNING", exhaustRpm);
-    const rpms = [supplyRpm, exhaustRpm].filter(Number.isFinite), rpmAvg = rpms.length ? rpms.reduce((a, b) => a + b, 0) / rpms.length : NaN, rpmPct = Number.isFinite(rpmAvg) && rpmAvg > 0 ? Math.max(5, Math.min(100, rpmAvg / 30)) : fallbackPct, animPct = fanOn ? rpmPct : 0, flowDuration = animPct <= 0 ? 0 : Math.max(0.55, 7.5 - Math.pow(animPct / 100, 0.55) * 6.95), rotorDuration = animPct <= 0 ? 0 : Math.max(0.45, 5.5 - Math.pow(animPct / 100, 0.6) * 5.05);
+  var applyRpm = (card, fan) => {
+    addRpmLabel(card.shadowRoot, "INDBL\xC6SNING", fan.supplyRpm);
+    addRpmLabel(card.shadowRoot, "UDSUGNING", fan.extractRpm);
+    const rpms = [fan.supplyRpm, fan.extractRpm].filter(Number.isFinite), rpmAvg = rpms.length ? rpms.reduce((a, b) => a + b, 0) / rpms.length : NaN, rpmPct = Number.isFinite(rpmAvg) && rpmAvg > 0 ? Math.max(5, Math.min(100, rpmAvg / 30)) : fan.normalizedPercent, animPct = fan.running ? rpmPct : 0, flowDuration = animPct <= 0 ? 0 : Math.max(0.55, 7.5 - Math.pow(animPct / 100, 0.55) * 6.95), rotorDuration = animPct <= 0 ? 0 : Math.max(0.45, 5.5 - Math.pow(animPct / 100, 0.6) * 5.05);
     card.shadowRoot.querySelectorAll(".dots").forEach((el) => {
       el.style.animationDuration = `${flowDuration || 1}s`;
-      el.style.animationPlayState = fanOn ? "running" : "paused";
+      el.style.animationPlayState = fan.running ? "running" : "paused";
     });
     card.shadowRoot.querySelectorAll(".fanRotor,.miniFan").forEach((el) => {
       el.style.animationDuration = `${rotorDuration || 1}s`;
-      el.style.animationPlayState = fanOn ? "running" : "paused";
+      el.style.animationPlayState = fan.running ? "running" : "paused";
     });
+  };
+  var originalBind = Card.prototype._bindControls;
+  if (originalBind) Card.prototype._bindControls = function(auto, d) {
+    return originalBind.call(this, { ...auto, fan: null }, d);
   };
   var originalRender = Card.prototype.render;
   Card.prototype.render = function() {
     originalRender.call(this);
     if (!this.shadowRoot || !this.config) return;
-    const p = providerFor(this), status = this.shadowRoot.querySelector(".status b");
-    if (status) status.textContent = p.label + (p.experimental ? " \xB7 Experimental" : "");
+    const model = modelFor(this), root = this.shadowRoot, status = root.querySelector(".status b"), subtitle = root.querySelector(".head p");
+    if (status) status.textContent = model.provider.name + (model.provider.experimental ? " \xB7 Experimental" : "");
+    if (subtitle) subtitle.textContent = `${model.provider.name} \xB7 v${model.card.version}`;
     iconifyStatus(this);
-    if (p.id === "genvex_connect") {
-      const supplyRpmEntity = p.resolve("fan_rpm_supply", "sensor"), exhaustRpmEntity = p.resolve("fan_rpm_extract", "sensor"), supplyRpm = Number(this._hass?.states?.[supplyRpmEntity]?.state), exhaustRpm = Number(this._hass?.states?.[exhaustRpmEntity]?.state), fan = p.resolve("fan_speed", "select"), level = Number(this._hass?.states?.[fan]?.state), rpms = [supplyRpm, exhaustRpm].filter(Number.isFinite), fanOn = rpms.some((rpm) => rpm > 0) || Number.isFinite(level) && level > 0;
-      applyRpm(this, supplyRpm, exhaustRpm, fanOn, Number.isFinite(level) ? level * 25 : 0);
+    applyRpm(this, model.fan);
+    const centerValue = root.querySelector("[data-boostcore] > text");
+    if (centerValue) centerValue.textContent = model.fan.displayValue;
+    const filter = model.filter.remainingPercentEntity, box = root.querySelector(".filterbox");
+    if (filter && box) {
+      const raw = Number(this._hass?.states?.[filter]?.state);
+      if (Number.isFinite(raw)) {
+        const pct = Math.max(0, Math.min(100, raw));
+        box.innerHTML = `<h3>FILTER</h3><div><b>${pct.toFixed(0)}% tilbage</b></div><div class="filterbar"><i style="width:${pct}%"></i></div>`;
+      }
     }
-    if (p.id === "danfoss_air") {
-      const filter = p.resolve("filter_remaining", "sensor"), box = this.shadowRoot.querySelector(".filterbox");
-      if (filter && box) {
-        const raw = Number(this._hass?.states?.[filter]?.state);
-        if (Number.isFinite(raw)) {
-          const pct2 = Math.max(0, Math.min(100, raw));
-          box.innerHTML = `<h3>FILTER</h3><div><b>${pct2.toFixed(0)}% tilbage</b></div><div class="filterbar"><i style="width:${pct2}%"></i></div>`;
+    const ctl = root.querySelector(".bypassCtl");
+    if (model.bypass.controllable && ctl) {
+      ctl.classList.add("clickable");
+      ctl.setAttribute("tabindex", "0");
+      const toggle = async (e) => {
+        e?.stopPropagation?.();
+        await model.bypass.toggle();
+      };
+      ctl.onclick = toggle;
+      ctl.onkeydown = (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          toggle(e);
         }
-      }
-      const bypass = p.resolve("bypass_active", "switch"), ctl = this.shadowRoot.querySelector(".bypassCtl");
-      if (bypass && ctl) {
-        const bypassOn = ["on", "true", "open", "active", "1"].includes(String(this._hass?.states?.[bypass]?.state || "").toLowerCase());
-        ctl.classList.toggle("active", bypassOn);
-        const iconPath = ctl.querySelector(".bypassIconPath");
-        if (iconPath) iconPath.setAttribute("d", bypassOn ? "M-8 14V-8l-5 5m5-5 5 5M8 -14V8l-5-5m5 5 5-5" : "M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5");
-        ctl.classList.add("clickable");
-        ctl.setAttribute("tabindex", "0");
-        const toggle = async (e) => {
-          e?.stopPropagation?.();
-          const state = String(this._hass?.states?.[bypass]?.state || "").toLowerCase();
-          await this._hass.callService("switch", state === "on" ? "turn_off" : "turn_on", { entity_id: bypass });
-        };
-        ctl.onclick = toggle;
-        ctl.onkeydown = (e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            toggle(e);
-          }
-        };
-      }
-      const fan = p.resolve("fan_control", "fan"), mode = p.resolve("operation_mode", "select"), boostEntity = p.resolve("boost_enable", "switch"), supplyRpmEntity = p.resolve("supply_fan_rpm", "sensor"), exhaustRpmEntity = p.resolve("exhaust_fan_rpm", "sensor"), supplyRpm = Number(this._hass?.states?.[supplyRpmEntity]?.state), exhaustRpm = Number(this._hass?.states?.[exhaustRpmEntity]?.state), ui = this.shadowRoot.querySelector(".ui"), steps = this.shadowRoot.querySelector(".steps"), level = this.shadowRoot.querySelector(".level"), fanState = String(this._hass?.states?.[fan]?.state || "").toLowerCase(), fanOn = !!fan && fanState !== "off" && fanState !== "unavailable" && fanState !== "unknown", pct = fanOn ? Math.round(p.fanPercentage(fan)) : 0;
-      applyRpm(this, supplyRpm, exhaustRpm, fanOn, pct);
-      if (fan && steps) {
-        steps.outerHTML = `<div class="danfossFan"><div class="danfossFanHead"><span>Ventilator</span><b data-fanpct>${pct}%</b></div><input data-fanslider type="range" min="0" max="100" step="10" value="${pct}"></div>`;
-        if (level) level.style.display = "none";
-        const slider = this.shadowRoot.querySelector("[data-fanslider]"), out = this.shadowRoot.querySelector("[data-fanpct]");
-        slider?.addEventListener("input", (e) => {
-          if (out) out.textContent = `${e.target.value}%`;
-        });
-        slider?.addEventListener("change", (e) => {
-          const value = Number(e.target.value);
-          if (value <= 0) p.turnFanOff(fan);
-          else p.setFanPercentage(fan, value);
-        });
-      }
-      const boost = this.shadowRoot.querySelector(".boost");
-      if (boost) {
-        boost.insertAdjacentHTML("afterend", `<button class="boost danfossAuto" ${mode ? "" : "disabled"}>AUTO</button><button class="boost danfossOff ${!fanOn ? "on" : ""}" ${fan ? "" : "disabled"}>SLUK</button>`);
-        const autoBtn = this.shadowRoot.querySelector(".danfossAuto"), offBtn = this.shadowRoot.querySelector(".danfossOff");
-        offBtn?.addEventListener("click", async (e) => {
-          e.stopPropagation();
-          if (boostEntity && ["on", "true", "active", "1"].includes(String(this._hass?.states?.[boostEntity]?.state || "").toLowerCase())) await this._hass.callService("switch", "turn_off", { entity_id: boostEntity });
-          if (fan) await p.turnFanOff(fan);
-        });
-        autoBtn?.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (!mode) return;
-          const st = this._hass?.states?.[mode], opts = st?.attributes?.options || [];
-          const auto = opts.find((x) => /auto/i.test(String(x)));
-          if (auto) this._hass.callService("select", "select_option", { entity_id: mode, option: auto });
-          else {
-            autoBtn.title = `AUTO option ikke fundet. Muligheder: ${opts.join(", ")}`;
-            console.warn("Ventilation Flow Card: Danfoss AUTO option not found", opts);
-          }
-        });
-      }
-      if (ui && !ui.querySelector("style[data-danfoss-style]")) {
-        const style = document.createElement("style");
-        style.dataset.danfossStyle = "";
-        style.textContent = `.danfossFan{margin:4px 0 12px}.danfossFanHead{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px}.danfossFanHead b{font-size:18px;color:#9ed4ff}.danfossFan input{width:100%;accent-color:#078ee6}.danfossAuto,.danfossOff{margin-top:8px}.danfossOff{border-color:#8a4650}`;
-        ui.appendChild(style);
-      }
+      };
     }
-    if (!this.shadowRoot.querySelector("style[data-status-icons]")) {
+    const steps = root.querySelector(".steps"), level = root.querySelector(".level");
+    if (model.fan.controlMode === "percentage" && steps) {
+      steps.outerHTML = `<div class="percentageFan"><div class="percentageFanHead"><span>Ventilator</span><b data-fan-value>${model.fan.displayValue}${model.fan.displayUnit}</b></div><input data-fan-control type="range" min="${model.fan.min}" max="${model.fan.max}" step="${model.fan.step}" value="${model.fan.value}"></div>`;
+      if (level) level.style.display = "none";
+      const slider = root.querySelector("[data-fan-control]"), out = root.querySelector("[data-fan-value]");
+      slider?.addEventListener("input", (e) => {
+        if (out) out.textContent = `${e.target.value}${model.fan.displayUnit}`;
+      });
+      slider?.addEventListener("change", (e) => model.fan.setValue(Number(e.target.value)));
+    } else if (model.fan.controlMode === "steps") {
+      root.querySelectorAll("[data-fan]").forEach((el) => {
+        el.style.cursor = model.capabilities.fanControl ? "pointer" : "default";
+        el.addEventListener("click", () => {
+          if (model.capabilities.fanControl) model.fan.setValue(el.dataset.fan);
+        });
+      });
+    }
+    const boost = root.querySelector("button.boost");
+    if (boost && model.fan.turnOff) {
+      boost.insertAdjacentHTML("afterend", `<button class="boost fanAuto" ${model.fan.autoAvailable ? "" : "disabled"}>AUTO</button><button class="boost fanOff ${!model.fan.running ? "on" : ""}">SLUK</button>`);
+      root.querySelector(".fanOff")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        model.fan.turnOff();
+      });
+      root.querySelector(".fanAuto")?.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        try {
+          await model.fan.setAuto();
+        } catch (error) {
+          e.currentTarget.title = error.message;
+          console.warn("Ventilation Flow Card:", error.message);
+        }
+      });
+    }
+    if (!root.querySelector("style[data-common-provider-ui]")) {
       const style = document.createElement("style");
-      style.dataset.statusIcons = "";
-      style.textContent = `.rpmValue{font:500 12px sans-serif;fill:#7894ac}.filterHouseWarn .filterIcon rect{fill:#ff8a3d;stroke:#ffd0a8;stroke-width:2;filter:drop-shadow(0 0 8px #ff8a3d99)}.filterHouseWarn .filterIcon path{fill:none;stroke:#241308;stroke-width:3;stroke-linecap:round}.filterHouseWarn .filterAlert{fill:#ff8a3d;stroke:#ffe0c4;stroke-width:2;filter:drop-shadow(0 0 5px #ff8a3daa)}.filterHouseWarn .filterAlertText{fill:#241308;font:900 14px sans-serif;pointer-events:none}.bypassCtl{text-decoration:none!important}.bypassCtl .bypassIconPath{fill:none;stroke:#61788d;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;transition:stroke .2s}.bypassCtl.active .bypassIconPath{stroke:#63d8f2;filter:drop-shadow(0 0 6px #63d8f2)}.bypassCtl.clickable:hover .bypassIconPath{stroke:#eafaff}`;
-      this.shadowRoot.appendChild(style);
+      style.dataset.commonProviderUi = "";
+      style.textContent = `.rpmValue{font:500 12px sans-serif;fill:#7894ac}.percentageFan{margin:4px 0 12px}.percentageFanHead{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px}.percentageFanHead b{font-size:18px;color:#9ed4ff}.percentageFan input{width:100%;accent-color:#078ee6}.fanAuto,.fanOff{margin-top:8px}.fanOff{border-color:#8a4650}.filterHouseWarn .filterIcon rect{fill:#ff8a3d;stroke:#ffd0a8;stroke-width:2;filter:drop-shadow(0 0 8px #ff8a3d99)}.filterHouseWarn .filterIcon path{fill:none;stroke:#241308;stroke-width:3;stroke-linecap:round}.filterHouseWarn .filterAlert{fill:#ff8a3d;stroke:#ffe0c4;stroke-width:2;filter:drop-shadow(0 0 5px #ff8a3daa)}.filterHouseWarn .filterAlertText{fill:#241308;font:900 14px sans-serif;pointer-events:none}.bypassCtl{text-decoration:none!important}.bypassCtl .bypassIconPath{fill:none;stroke:#61788d;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;transition:stroke .2s}.bypassCtl.active .bypassIconPath{stroke:#63d8f2;filter:drop-shadow(0 0 6px #63d8f2)}.bypassCtl.clickable:hover .bypassIconPath{stroke:#eafaff}`;
+      root.appendChild(style);
     }
-  };
-  var originalBind = Card.prototype._bindControls;
-  if (originalBind) Card.prototype._bindControls = function(auto, d) {
-    if (providerFor(this).id === "danfoss_air") auto = { ...auto, fan: null };
-    return originalBind.call(this, auto, d);
   };
   var VentilationFlowCardEditor = class extends HTMLElement {
     set hass(h) {
@@ -816,8 +907,8 @@ Action: switch.${action}\u2026`;
     }
     render() {
       if (!this.shadowRoot) this.attachShadow({ mode: "open" });
-      const c = this._config || {}, danfoss = c.provider === "danfoss_air", selected = c.ventilation_entity || c.genvex_entity || "";
-      this.shadowRoot.innerHTML = `<style>:host{display:block;padding:8px 0}.grid,.field{display:grid;gap:10px}.field{gap:5px}label{font-weight:600}select,input{width:100%;box-sizing:border-box;padding:10px}.hint{font-size:12px;color:var(--secondary-text-color)}</style><div class="grid"><div class="field"><label>Integration / provider</label><select data-provider><option value="genvex_connect" ${!danfoss ? "selected" : ""}>Genvex Connect</option><option value="danfoss_air" ${danfoss ? "selected" : ""}>Danfoss Air (experimental)</option></select></div><div class="field"><label>${danfoss ? "Danfoss Air entity (optional)" : "Genvex-anl\xE6g"}</label><ha-entity-picker data-entity value="${selected}" allow-custom-entity></ha-entity-picker><div class="hint">${danfoss ? "Danfoss entities findes automatisk." : "V\xE6lg \xE9n entity fra Genvex-anl\xE6gget."}</div></div>${danfoss ? "" : `<div class="field"><label>Filterinterval (dage)</label><input data-key="filter_interval_days" type="number" min="-1" step="1" value="${c.filter_interval_days ?? c.filter_days ?? -1}"><div class="hint">Brug -1 eller lad feltet v\xE6re tomt for at anvende intervallet fra Genvex Connect. En positiv v\xE6rdi overstyrer integrationen.</div></div>`}<div class="field"><label>Titel</label><input data-key="title" value="${c.title || ""}"></div><div class="field"><label>H\xF8jde (px)</label><input data-key="height" type="number" value="${c.height || 720}"></div></div>`;
+      const c = this._config || {}, danfoss = c.provider === "danfoss_air", selected = c.ventilation_entity || c.genvex_entity || "", providerName = danfoss ? "Danfoss Air" : "Genvex Connect";
+      this.shadowRoot.innerHTML = `<style>:host{display:block;padding:8px 0}.grid,.field{display:grid;gap:10px}.field{gap:5px}label{font-weight:600}select,input{width:100%;box-sizing:border-box;padding:10px}.hint{font-size:12px;color:var(--secondary-text-color)}.meta{display:flex;justify-content:space-between;padding:8px 10px;border-radius:8px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:12px}</style><div class="grid"><div class="meta"><span>${providerName}</span><span>Card v${CARD_VERSION2}</span></div><div class="field"><label>Integration / provider</label><select data-provider><option value="genvex_connect" ${!danfoss ? "selected" : ""}>Genvex Connect</option><option value="danfoss_air" ${danfoss ? "selected" : ""}>Danfoss Air (experimental)</option></select></div><div class="field"><label>${danfoss ? "Danfoss Air entity (optional)" : "Genvex-anl\xE6g"}</label><ha-entity-picker data-entity value="${selected}" allow-custom-entity></ha-entity-picker><div class="hint">${danfoss ? "Danfoss entities findes automatisk." : "V\xE6lg \xE9n entity fra Genvex-anl\xE6gget."}</div></div>${danfoss ? "" : `<div class="field"><label>Filterinterval (dage)</label><input data-key="filter_interval_days" type="number" min="-1" step="1" value="${c.filter_interval_days ?? c.filter_days ?? -1}"><div class="hint">Brug -1 eller lad feltet v\xE6re tomt for at anvende intervallet fra Genvex Connect. En positiv v\xE6rdi overstyrer integrationen.</div></div>`}<div class="field"><label>Titel</label><input data-key="title" value="${c.title || ""}"></div><div class="field"><label>H\xF8jde (px)</label><input data-key="height" type="number" value="${c.height || 720}"></div></div>`;
       const picker = this.shadowRoot.querySelector("[data-entity]");
       if (picker) picker.hass = this._hass;
       this.shadowRoot.querySelector("[data-provider]")?.addEventListener("change", (e) => this._fire({ ...c, provider: e.target.value, ventilation_entity: "" }));
