@@ -627,7 +627,7 @@ Action: switch.${action}\u2026`;
   console.info("%c VENTILATION-FLOW-CARD %c " + CARD_VERSION, "background:#078ee6;color:white;padding:3px", "background:#333;color:white;padding:3px");
 
   // src/ventilation-flow-card.js
-  var CARD_VERSION2 = "1.1.2-dev.1";
+  var CARD_VERSION2 = "1.1.2-dev.2";
   var Card = customElements.get("genvex-flow-card");
   if (!Card) throw new Error("Ventilation Flow Card: card core did not register");
   var providerFor = (card) => createProvider(card);
@@ -785,14 +785,14 @@ Action: switch.${action}\u2026`;
       if (ui && !ui.querySelector("style[data-danfoss-style]")) {
         const style = document.createElement("style");
         style.dataset.danfossStyle = "";
-        style.textContent = `.danfossFan{margin:4px 0 12px}.danfossFanHead{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px}.danfossFanHead b{font-size:18px;color:#9ed4ff}.danfossFan input{width:100%;accent-color:#078ee6}.danfossAuto,.danfossOff{margin-top:8px}.danfossOff{border-color:#8a4650}.rpmValue{font:500 12px sans-serif;fill:#7894ac}`;
+        style.textContent = `.danfossFan{margin:4px 0 12px}.danfossFanHead{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px}.danfossFanHead b{font-size:18px;color:#9ed4ff}.danfossFan input{width:100%;accent-color:#078ee6}.danfossAuto,.danfossOff{margin-top:8px}.danfossOff{border-color:#8a4650}`;
         ui.appendChild(style);
       }
     }
     if (!this.shadowRoot.querySelector("style[data-status-icons]")) {
       const style = document.createElement("style");
       style.dataset.statusIcons = "";
-      style.textContent = `.filterHouseWarn .filterIcon rect{fill:#ff8a3d;stroke:#ffd0a8;stroke-width:2;filter:drop-shadow(0 0 8px #ff8a3d99)}.filterHouseWarn .filterIcon path{fill:none;stroke:#241308;stroke-width:3;stroke-linecap:round}.filterHouseWarn .filterAlert{fill:#ff8a3d;stroke:#ffe0c4;stroke-width:2;filter:drop-shadow(0 0 5px #ff8a3daa)}.filterHouseWarn .filterAlertText{fill:#241308;font:900 14px sans-serif;pointer-events:none}.bypassCtl{text-decoration:none!important}.bypassCtl .bypassIconPath{fill:none;stroke:#61788d;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;transition:stroke .2s}.bypassCtl.active .bypassIconPath{stroke:#63d8f2;filter:drop-shadow(0 0 6px #63d8f2)}.bypassCtl.clickable:hover .bypassIconPath{stroke:#eafaff}`;
+      style.textContent = `.rpmValue{font:500 12px sans-serif;fill:#7894ac}.filterHouseWarn .filterIcon rect{fill:#ff8a3d;stroke:#ffd0a8;stroke-width:2;filter:drop-shadow(0 0 8px #ff8a3d99)}.filterHouseWarn .filterIcon path{fill:none;stroke:#241308;stroke-width:3;stroke-linecap:round}.filterHouseWarn .filterAlert{fill:#ff8a3d;stroke:#ffe0c4;stroke-width:2;filter:drop-shadow(0 0 5px #ff8a3daa)}.filterHouseWarn .filterAlertText{fill:#241308;font:900 14px sans-serif;pointer-events:none}.bypassCtl{text-decoration:none!important}.bypassCtl .bypassIconPath{fill:none;stroke:#61788d;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;transition:stroke .2s}.bypassCtl.active .bypassIconPath{stroke:#63d8f2;filter:drop-shadow(0 0 6px #63d8f2)}.bypassCtl.clickable:hover .bypassIconPath{stroke:#eafaff}`;
       this.shadowRoot.appendChild(style);
     }
   };
