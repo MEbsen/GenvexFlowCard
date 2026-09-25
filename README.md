@@ -95,7 +95,7 @@ The historical card type `custom:genvex-flow-card` is intentionally retained for
 | `provider` | string | `genvex_connect` | Ventilation provider. Currently `genvex_connect` or `danfoss_air`. |
 | `ventilation_entity` | string | auto / optional | Entity used to anchor provider discovery when applicable. |
 | `genvex_entity` | string | legacy / optional | Existing Genvex configurations remain supported. |
-| `filter_interval_days` | number | `180` | Genvex fallback filter interval when the integration does not provide a usable interval. |
+| `filter_interval_days` | number | `-1` | `-1` or empty uses the interval reported by Genvex Connect. A positive value overrides the integration. |
 | `title` | string | `Ventilation` | Card title. |
 | `height` | number | `720` | Rendered card height in pixels. |
 
@@ -119,7 +119,9 @@ This architecture also allows systems to expose only the features they actually 
 
 Genvex Connect remains fully backwards compatible with the original Genvex Flow Card.
 
-The card can use the integration's fan level, temperatures, operating states, boost and filter entities. When no usable filter interval is available, the configurable `filter_interval_days` value is used as a fallback.
+The card can use the integration's fan level, temperatures, operating states, boost, fan RPM and filter entities. Filter warnings use `filter_days_left` directly when available. With `filter_interval_days: -1` (the default), the service interval is read from Genvex Connect in days or months; a positive configured value overrides the integration.
+
+On CTS400 systems running Genvex Connect 1.5.4 or newer, the card exposes the available humidity threshold, low/high humidity fan levels and high-humidity timeout behind a compact **Fugtstyring** settings button. The button is omitted on systems that do not expose these capabilities.
 
 ## Danfoss Air
 

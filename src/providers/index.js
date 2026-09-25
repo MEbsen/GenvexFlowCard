@@ -44,6 +44,30 @@ queueMicrotask(()=>{
       }
     }
 
+    // CTS400 humidity regulation is configuration, not a daily control. Keep
+    // it behind a capability-driven settings button like the Boost settings.
+    const humidityLow=p.resolve("cts400_humidity_low_level","number"),
+      humidityLowStep=p.resolve("cts400_humidity_low_step","select"),
+      humidityHighStep=p.resolve("cts400_humidity_high_step","select"),
+      humidityMaxTime=p.resolve("cts400_humidity_high_max_time","number");
+    if(humidityLow||humidityLowStep||humidityHighStep||humidityMaxTime){
+      const ui=root.querySelector(".ui");
+      if(ui&&!root.querySelector(".humiditySettingsRow")){
+        const row=document.createElement("div");row.className="humiditySettingsRow";
+        const button=document.createElement("button");button.className="humidityConfig";button.type="button";button.innerHTML="<span>Fugtstyring</span><span aria-hidden=\"true\">⚙</span>";button.setAttribute("aria-label","Fugtstyring indstillinger");row.appendChild(button);
+        const panel=document.createElement("div");panel.className="humiditySettings";
+        const numberField=(id,label)=>{if(!id)return"";const st=this._hass?.states?.[id],a=st?.attributes||{},value=st?.state??"",min=Number.isFinite(Number(a.min))?`min="${a.min}"`:"",max=Number.isFinite(Number(a.max))?`max="${a.max}"`:"",step=Number.isFinite(Number(a.step))?`step="${a.step}"`:'step="1"',unit=a.unit_of_measurement||"";return `<label>${label}<span><input type="number" data-humidity-number="${id}" ${min} ${max} ${step} value="${value}"><em>${unit}</em></span></label>`};
+        const selectField=(id,label)=>{if(!id)return"";const st=this._hass?.states?.[id],options=st?.attributes?.options||[];return `<label>${label}<select data-humidity-select="${id}">${options.map(option=>`<option value="${option}" ${String(option)===String(st?.state)?"selected":""}>${option}</option>`).join("")}</select></label>`};
+        panel.innerHTML=`<div class="humiditySettingsTitle">FUGTSTYRING</div>${numberField(humidityLow,"Lav fugtgrænse")}${selectField(humidityLowStep,"Trin ved lav fugt")}${selectField(humidityHighStep,"Trin ved høj fugt")}${numberField(humidityMaxTime,"Maks. tid ved høj fugt")}`;
+        const firstSeparator=ui.querySelector(".sep");
+        if(firstSeparator){firstSeparator.insertAdjacentElement("beforebegin",row);row.insertAdjacentElement("afterend",panel)}else{ui.append(row,panel)}
+        const applyHumidity=()=>{const open=this._humidityConfigOpen===true;panel.classList.toggle("open",open);button.classList.toggle("on",open);button.setAttribute("aria-expanded",String(open))};
+        applyHumidity();button.addEventListener("click",e=>{e.stopPropagation();this._humidityConfigOpen=!(this._humidityConfigOpen===true);applyHumidity()});
+        panel.querySelectorAll("[data-humidity-number]").forEach(input=>input.addEventListener("change",async e=>{const value=Number(e.target.value);if(!Number.isFinite(value))return;await this._hass.callService("number","set_value",{entity_id:e.target.dataset.humidityNumber,value})}));
+        panel.querySelectorAll("[data-humidity-select]").forEach(select=>select.addEventListener("change",async e=>{await this._hass.callService("select","select_option",{entity_id:e.target.dataset.humiditySelect,option:e.target.value})}));
+      }
+    }
+
     // DRIFT is reference information, so keep it collapsed by default.
     const ui=root.querySelector(".ui"),drift=[...(ui?.querySelectorAll("h3")||[])].find(h=>h.textContent.trim()==="DRIFT");
     if(drift&&!root.querySelector(".driftAccordion")){
@@ -68,6 +92,6 @@ queueMicrotask(()=>{
     root.querySelector("[data-cancel]")?.addEventListener("click",()=>{this._filterConfirmOpen=false});
     root.querySelector("[data-confirmreset]")?.addEventListener("click",()=>{this._filterConfirmOpen=false});
 
-    if(!root.querySelector("style[data-persistent-ui]")){const style=document.createElement("style");style.dataset.persistentUi="";style.textContent=`.boostSettingsRow{display:grid;grid-template-columns:1fr 42px;gap:6px;margin-top:12px}.boostSettingsRow>.boost{margin-top:0}.boostConfig{border:1px solid #285777;background:#0b2033;color:#dcefff;border-radius:10px;cursor:pointer;font-size:18px;line-height:1}.boostConfig:hover,.boostConfig.on{background:#15527d;border-color:#4b83aa}.boostSettings{display:none;margin-top:7px;padding:10px;border:1px solid #244866;border-radius:10px;background:#081a29}.boostSettings.open{display:grid;gap:9px}.boostSettingsTitle{color:#9db7ca;font-size:10px;font-weight:700;letter-spacing:.08em}.boostSettings label{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:#cfe2f2}.boostSettings label span{display:flex;align-items:center;gap:5px}.boostSettings input{width:68px;box-sizing:border-box;border:1px solid #355b78;border-radius:7px;background:#102b42;color:#eaf6ff;padding:5px}.boostSettings em{min-width:20px;color:#7f9db5;font-size:10px;font-style:normal}.accordionHead{display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;padding:2px 0}.accordionHead:hover{color:#cfe8fa}.driftAccordion{display:none}.driftAccordion.open{display:block}`;root.appendChild(style)}
+    if(!root.querySelector("style[data-persistent-ui]")){const style=document.createElement("style");style.dataset.persistentUi="";style.textContent=`.boostSettingsRow{display:grid;grid-template-columns:1fr 42px;gap:6px;margin-top:12px}.boostSettingsRow>.boost{margin-top:0}.boostConfig,.humidityConfig{border:1px solid #285777;background:#0b2033;color:#dcefff;border-radius:10px;cursor:pointer;font-size:18px;line-height:1}.boostConfig:hover,.boostConfig.on,.humidityConfig:hover,.humidityConfig.on{background:#15527d;border-color:#4b83aa}.boostSettings,.humiditySettings{display:none;margin-top:7px;padding:10px;border:1px solid #244866;border-radius:10px;background:#081a29}.boostSettings.open,.humiditySettings.open{display:grid;gap:9px}.boostSettingsTitle,.humiditySettingsTitle{color:#9db7ca;font-size:10px;font-weight:700;letter-spacing:.08em}.boostSettings label,.humiditySettings label{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:#cfe2f2}.boostSettings label span,.humiditySettings label span{display:flex;align-items:center;gap:5px}.boostSettings input,.humiditySettings input,.humiditySettings select{width:68px;box-sizing:border-box;border:1px solid #355b78;border-radius:7px;background:#102b42;color:#eaf6ff;padding:5px}.boostSettings em,.humiditySettings em{min-width:20px;color:#7f9db5;font-size:10px;font-style:normal}.humiditySettingsRow{margin-top:8px}.humidityConfig{display:flex;align-items:center;justify-content:space-between;width:100%;padding:9px 11px;font-size:12px;font-weight:600}.accordionHead{display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;padding:2px 0}.accordionHead:hover{color:#cfe8fa}.driftAccordion{display:none}.driftAccordion.open{display:block}`;root.appendChild(style)}
   };
 });
