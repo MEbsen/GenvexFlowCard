@@ -471,8 +471,7 @@
     };
   });
 
-  // src/generated/legacy-card-core.js
-  var CARD_VERSION = "1.0.1";
+  // src/card-core.js
   var GenvexFlowCard = class extends HTMLElement {
     setConfig(c) {
       this.config = { title: "Ventilation", height: 720, aspect_ratio: "16/10", grid_options: { columns: 12, rows: 8, min_columns: 3, min_rows: 4 }, ...c };
@@ -739,20 +738,19 @@ Action: switch.${action}\u2026`;
   customElements.define("genvex-flow-card", GenvexFlowCard);
   window.customCards = window.customCards || [];
   window.customCards.push({ type: "genvex-flow-card", name: "Ventilation Flow Card", description: "Animated heat-recovery ventilation visualization", preview: true });
-  console.info("%c VENTILATION-FLOW-CARD %c " + CARD_VERSION, "background:#078ee6;color:white;padding:3px", "background:#333;color:white;padding:3px");
 
   // src/ventilation-flow-card.js
-  var CARD_VERSION2 = "1.1.2-dev.3";
+  var CARD_VERSION = "1.1.2-dev.4";
   var Card = customElements.get("genvex-flow-card");
   if (!Card) throw new Error("Ventilation Flow Card: card core did not register");
   var providerFor = (card) => createProvider(card);
-  var modelFor = (card) => providerFor(card).model(CARD_VERSION2);
+  var modelFor = (card) => providerFor(card).model(CARD_VERSION);
   Card.prototype.selectedDeviceId = function() {
     const p = providerFor(this);
     return typeof p.selectedDeviceId === "function" ? p.selectedDeviceId() : null;
   };
   Card.prototype.entityByKey = function(key, domain) {
-    const p = providerFor(this), model = p.model(CARD_VERSION2);
+    const p = providerFor(this), model = p.model(CARD_VERSION);
     return model.entities[key] || p.resolve(key, domain);
   };
   var originalState = Card.prototype.state;
@@ -908,7 +906,7 @@ Action: switch.${action}\u2026`;
     render() {
       if (!this.shadowRoot) this.attachShadow({ mode: "open" });
       const c = this._config || {}, danfoss = c.provider === "danfoss_air", selected = c.ventilation_entity || c.genvex_entity || "", providerName = danfoss ? "Danfoss Air" : "Genvex Connect";
-      this.shadowRoot.innerHTML = `<style>:host{display:block;padding:8px 0}.grid,.field{display:grid;gap:10px}.field{gap:5px}label{font-weight:600}select,input{width:100%;box-sizing:border-box;padding:10px}.hint{font-size:12px;color:var(--secondary-text-color)}.meta{display:flex;justify-content:space-between;padding:8px 10px;border-radius:8px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:12px}</style><div class="grid"><div class="meta"><span>${providerName}</span><span>Card v${CARD_VERSION2}</span></div><div class="field"><label>Integration / provider</label><select data-provider><option value="genvex_connect" ${!danfoss ? "selected" : ""}>Genvex Connect</option><option value="danfoss_air" ${danfoss ? "selected" : ""}>Danfoss Air (experimental)</option></select></div><div class="field"><label>${danfoss ? "Danfoss Air entity (optional)" : "Genvex-anl\xE6g"}</label><ha-entity-picker data-entity value="${selected}" allow-custom-entity></ha-entity-picker><div class="hint">${danfoss ? "Danfoss entities findes automatisk." : "V\xE6lg \xE9n entity fra Genvex-anl\xE6gget."}</div></div>${danfoss ? "" : `<div class="field"><label>Filterinterval (dage)</label><input data-key="filter_interval_days" type="number" min="-1" step="1" value="${c.filter_interval_days ?? c.filter_days ?? -1}"><div class="hint">Brug -1 eller lad feltet v\xE6re tomt for at anvende intervallet fra Genvex Connect. En positiv v\xE6rdi overstyrer integrationen.</div></div>`}<div class="field"><label>Titel</label><input data-key="title" value="${c.title || ""}"></div><div class="field"><label>H\xF8jde (px)</label><input data-key="height" type="number" value="${c.height || 720}"></div></div>`;
+      this.shadowRoot.innerHTML = `<style>:host{display:block;padding:8px 0}.grid,.field{display:grid;gap:10px}.field{gap:5px}label{font-weight:600}select,input{width:100%;box-sizing:border-box;padding:10px}.hint{font-size:12px;color:var(--secondary-text-color)}.meta{display:flex;justify-content:space-between;padding:8px 10px;border-radius:8px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:12px}</style><div class="grid"><div class="meta"><span>${providerName}</span><span>Card v${CARD_VERSION}</span></div><div class="field"><label>Integration / provider</label><select data-provider><option value="genvex_connect" ${!danfoss ? "selected" : ""}>Genvex Connect</option><option value="danfoss_air" ${danfoss ? "selected" : ""}>Danfoss Air (experimental)</option></select></div><div class="field"><label>${danfoss ? "Danfoss Air entity (optional)" : "Genvex-anl\xE6g"}</label><ha-entity-picker data-entity value="${selected}" allow-custom-entity></ha-entity-picker><div class="hint">${danfoss ? "Danfoss entities findes automatisk." : "V\xE6lg \xE9n entity fra Genvex-anl\xE6gget."}</div></div>${danfoss ? "" : `<div class="field"><label>Filterinterval (dage)</label><input data-key="filter_interval_days" type="number" min="-1" step="1" value="${c.filter_interval_days ?? c.filter_days ?? -1}"><div class="hint">Brug -1 eller lad feltet v\xE6re tomt for at anvende intervallet fra Genvex Connect. En positiv v\xE6rdi overstyrer integrationen.</div></div>`}<div class="field"><label>Titel</label><input data-key="title" value="${c.title || ""}"></div><div class="field"><label>H\xF8jde (px)</label><input data-key="height" type="number" value="${c.height || 720}"></div></div>`;
       const picker = this.shadowRoot.querySelector("[data-entity]");
       if (picker) picker.hass = this._hass;
       this.shadowRoot.querySelector("[data-provider]")?.addEventListener("change", (e) => this._fire({ ...c, provider: e.target.value, ventilation_entity: "" }));
@@ -931,5 +929,5 @@ Action: switch.${action}\u2026`;
     entry.name = "Ventilation Flow Card";
     entry.description = "Animated heat-recovery ventilation card for Genvex Connect and Danfoss Air";
   }
-  console.info("%c VENTILATION FLOW CARD %c " + CARD_VERSION2, "background:#078ee6;color:white;padding:3px", "background:#333;color:white;padding:3px");
+  console.info("%c VENTILATION FLOW CARD %c " + CARD_VERSION, "background:#078ee6;color:white;padding:3px", "background:#333;color:white;padding:3px");
 })();
