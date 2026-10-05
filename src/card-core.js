@@ -1,4 +1,3 @@
-const CARD_VERSION="1.0.1";
 class GenvexFlowCard extends HTMLElement{
  setConfig(c){this.config={title:"Ventilation",height:720,aspect_ratio:"16/10",grid_options:{columns:12,rows:8,min_columns:3,min_rows:4},...c};if(!this.shadowRoot)this.attachShadow({mode:"open"});this.render()}
  set hass(h){this._hass=h;if(!this._registryLoading&&!this._registry){this._registryLoading=true;Promise.all([h.callWS({type:"config/entity_registry/list"}),h.callWS({type:"config/device_registry/list"})]).then(([r,d])=>{this._registry=r||[];this._devices=d||[];this._registryLoading=false;this.render()}).catch(()=>{this._registry=[];this._registryLoading=false;this.render()})}this.render()} getCardSize(){return Math.max(5,Math.ceil((+this.config?.height||720)/50))}
@@ -56,4 +55,4 @@ class GenvexFlowCardEditor extends HTMLElement{
 }
 customElements.define("genvex-flow-card-editor",GenvexFlowCardEditor);
 
-customElements.define("genvex-flow-card",GenvexFlowCard);window.customCards=window.customCards||[];window.customCards.push({type:"genvex-flow-card",name:"Ventilation Flow Card",description:"Animated heat-recovery ventilation visualization",preview:true});console.info("%c VENTILATION-FLOW-CARD %c "+CARD_VERSION,"background:#078ee6;color:white;padding:3px","background:#333;color:white;padding:3px");
+customElements.define("genvex-flow-card",GenvexFlowCard);window.customCards=window.customCards||[];window.customCards.push({type:"genvex-flow-card",name:"Ventilation Flow Card",description:"Animated heat-recovery ventilation visualization",preview:true});
