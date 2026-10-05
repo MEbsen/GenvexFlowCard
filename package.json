@@ -2,7 +2,7 @@
   "name":"ventilation-flow-card",
   "private":true,
   "scripts":{
-    "build":"esbuild src/ventilation-flow-card.js --bundle --format=iife --target=es2020 --pure:console.info --minify --outfile=dist/genvex-flow-card.js && node scripts/apply-version.mjs",
+    "build":"esbuild src/ventilation-flow-card.js --bundle --format=iife --target=es2020 --minify --outfile=dist/genvex-flow-card.js && node scripts/apply-version.mjs",
     "smoke":"node scripts/smoke-test.mjs dist/genvex-flow-card.js",
     "check":"npm run build && node --check dist/genvex-flow-card.js && npm run smoke"
   },
