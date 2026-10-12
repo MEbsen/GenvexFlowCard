@@ -24,7 +24,9 @@ jobs:
       - name: Install build dependencies
         run: npm install --no-audit --no-fund
       - name: Build and smoke test standalone card
-        run: npm run check
+        run: |
+          npx playwright install --with-deps chromium
+          npm run check
       - name: Read card version
         id: version
         shell: bash

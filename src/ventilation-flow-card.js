@@ -1,28 +1,88 @@
 import { createProvider } from "./providers/index.js";
-import "./card-core.js";
+import { fanModel } from "./fan-model.js";
+import { CardView } from "./card-view.js";
+import { AnimationController } from "./animation-controller.js";
+import { VentilationFlowCardEditor } from "./card-editor.js";
 
-const CARD_VERSION="1.1.2-dev.4";
-const Card=customElements.get("genvex-flow-card");
-if(!Card) throw new Error("Ventilation Flow Card: card core did not register");
-const providerFor=card=>createProvider(card);
-const modelFor=card=>providerFor(card).model(CARD_VERSION);
-Card.prototype.selectedDeviceId=function(){const p=providerFor(this);return typeof p.selectedDeviceId==="function"?p.selectedDeviceId():null};
-Card.prototype.entityByKey=function(key,domain){const p=providerFor(this),model=p.model(CARD_VERSION);return model.entities[key]||p.resolve(key,domain)};
-const originalState=Card.prototype.state;Card.prototype.state=function(entity,f="—"){const model=modelFor(this);if(entity&&entity===model.fan.displayEntity&&Number.isFinite(model.fan.legacyLevel))return String(model.fan.legacyLevel);return originalState.call(this,entity,f)};
-const iconifyStatus=card=>{const root=card.shadowRoot;if(!root)return;const filterWarn=root.querySelector(".filterHouseWarn");if(filterWarn){filterWarn.innerHTML=`<g class="filterIcon" transform="translate(365 420)"><rect x="-17" y="-13" width="34" height="26" rx="4"></rect><path d="M-11 -7H11M-11 0H11M-11 7H11"></path><circle class="filterAlert" cx="23" cy="-13" r="9"></circle><text class="filterAlertText" x="23" y="-9" text-anchor="middle">!</text></g>`;filterWarn.setAttribute("aria-label","Filter kræver opmærksomhed");filterWarn.setAttribute("title","Filter kræver opmærksomhed")}
- const oldBypass=root.querySelector(".bypassCtl");if(oldBypass&&oldBypass.tagName?.toLowerCase()==="text"){const ns="http://www.w3.org/2000/svg",bypass=document.createElementNS(ns,"g");bypass.setAttribute("class",oldBypass.getAttribute("class")||"bypassCtl");bypass.setAttribute("transform","translate(365 220)");bypass.setAttribute("aria-label","Bypass");bypass.setAttribute("title","Bypass");const path=document.createElementNS(ns,"path");path.setAttribute("class","bypassIconPath");path.setAttribute("d","M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5");bypass.appendChild(path);oldBypass.replaceWith(bypass)}else if(oldBypass){oldBypass.setAttribute("transform","translate(365 220)")}
- const bypass=root.querySelector(".bypassCtl"),path=bypass?.querySelector(".bypassIconPath");if(path)path.setAttribute("d",bypass.classList.contains("active")?"M-8 14V-8l-5 5m5-5 5 5M8 -14V8l-5-5m5 5 5-5":"M-16 -8H4l-5-5m5 5-5 5M16 8H-4l5-5m-5 5 5 5")};
-const addRpmLabel=(root,label,rpm)=>{if(!Number.isFinite(rpm))return;const lbl=[...root.querySelectorAll(".label")].find(x=>x.textContent.trim()===label),temp=lbl?.nextElementSibling;if(!temp)return;const ns="http://www.w3.org/2000/svg",txt=document.createElementNS(ns,"text");txt.setAttribute("class","rpmValue");txt.setAttribute("x",temp.getAttribute("x")||"0");txt.setAttribute("y",String(Number(temp.getAttribute("y")||0)+19));txt.textContent=`(${Math.round(rpm).toLocaleString("da-DK")} RPM)`;temp.after(txt)};
-const applyRpm=(card,fan)=>{addRpmLabel(card.shadowRoot,"INDBLÆSNING",fan.supplyRpm);addRpmLabel(card.shadowRoot,"UDSUGNING",fan.extractRpm);const rpms=[fan.supplyRpm,fan.extractRpm].filter(Number.isFinite),rpmAvg=rpms.length?rpms.reduce((a,b)=>a+b,0)/rpms.length:NaN,rpmPct=Number.isFinite(rpmAvg)&&rpmAvg>0?Math.max(5,Math.min(100,rpmAvg/30)):fan.normalizedPercent,animPct=fan.running?rpmPct:0,flowDuration=animPct<=0?0:Math.max(.55,7.5-(Math.pow(animPct/100,.55)*6.95)),rotorDuration=animPct<=0?0:Math.max(.45,5.5-(Math.pow(animPct/100,.6)*5.05));card.shadowRoot.querySelectorAll(".dots").forEach(el=>{el.style.animationDuration=`${flowDuration||1}s`;el.style.animationPlayState=fan.running?"running":"paused"});card.shadowRoot.querySelectorAll(".fanRotor,.miniFan").forEach(el=>{el.style.animationDuration=`${rotorDuration||1}s`;el.style.animationPlayState=fan.running?"running":"paused"})};
-const originalBind=Card.prototype._bindControls;if(originalBind)Card.prototype._bindControls=function(auto,d){return originalBind.call(this,{...auto,fan:null},d)};
-const originalRender=Card.prototype.render;Card.prototype.render=function(){originalRender.call(this);if(!this.shadowRoot||!this.config)return;const model=modelFor(this),root=this.shadowRoot,status=root.querySelector(".status b"),subtitle=root.querySelector(".head p");
- if(status)status.textContent=model.provider.name+(model.provider.experimental?" · Experimental":"");if(subtitle)subtitle.textContent=`${model.provider.name} · v${model.card.version}`;iconifyStatus(this);applyRpm(this,model.fan);
- const centerValue=root.querySelector("[data-boostcore] > text");if(centerValue)centerValue.textContent=model.fan.displayValue;
- const filter=model.filter.remainingPercentEntity,box=root.querySelector(".filterbox");if(filter&&box){const raw=Number(this._hass?.states?.[filter]?.state);if(Number.isFinite(raw)){const pct=Math.max(0,Math.min(100,raw));box.innerHTML=`<h3>FILTER</h3><div><b>${pct.toFixed(0)}% tilbage</b></div><div class="filterbar"><i style="width:${pct}%"></i></div>`}}
- const ctl=root.querySelector(".bypassCtl");if(model.bypass.controllable&&ctl){ctl.classList.add("clickable");ctl.setAttribute("tabindex","0");const toggle=async e=>{e?.stopPropagation?.();await model.bypass.toggle()};ctl.onclick=toggle;ctl.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle(e)}}}
- const steps=root.querySelector(".steps"),level=root.querySelector(".level");if(model.fan.controlMode==="percentage"&&steps){steps.outerHTML=`<div class="percentageFan"><div class="percentageFanHead"><span>Ventilator</span><b data-fan-value>${model.fan.displayValue}${model.fan.displayUnit}</b></div><input data-fan-control type="range" min="${model.fan.min}" max="${model.fan.max}" step="${model.fan.step}" value="${model.fan.value}"></div>`;if(level)level.style.display="none";const slider=root.querySelector("[data-fan-control]"),out=root.querySelector("[data-fan-value]");slider?.addEventListener("input",e=>{if(out)out.textContent=`${e.target.value}${model.fan.displayUnit}`});slider?.addEventListener("change",e=>model.fan.setValue(Number(e.target.value)))}else if(model.fan.controlMode==="steps"){root.querySelectorAll("[data-fan]").forEach(el=>{el.style.cursor=model.capabilities.fanControl?"pointer":"default";el.addEventListener("click",()=>{if(model.capabilities.fanControl)model.fan.setValue(el.dataset.fan)})})}
- const boost=root.querySelector("button.boost");if(boost&&model.fan.turnOff){boost.insertAdjacentHTML("afterend",`<button class="boost fanAuto" ${model.fan.autoAvailable?"":"disabled"}>AUTO</button><button class="boost fanOff ${!model.fan.running?"on":""}">SLUK</button>`);root.querySelector(".fanOff")?.addEventListener("click",e=>{e.stopPropagation();model.fan.turnOff()});root.querySelector(".fanAuto")?.addEventListener("click",async e=>{e.stopPropagation();try{await model.fan.setAuto()}catch(error){e.currentTarget.title=error.message;console.warn("Ventilation Flow Card:",error.message)}})}
- if(!root.querySelector("style[data-common-provider-ui]")){const style=document.createElement("style");style.dataset.commonProviderUi="";style.textContent=`.rpmValue{font:500 12px sans-serif;fill:#7894ac}.percentageFan{margin:4px 0 12px}.percentageFanHead{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px}.percentageFanHead b{font-size:18px;color:#9ed4ff}.percentageFan input{width:100%;accent-color:#078ee6}.fanAuto,.fanOff{margin-top:8px}.fanOff{border-color:#8a4650}.filterHouseWarn .filterIcon rect{fill:#ff8a3d;stroke:#ffd0a8;stroke-width:2;filter:drop-shadow(0 0 8px #ff8a3d99)}.filterHouseWarn .filterIcon path{fill:none;stroke:#241308;stroke-width:3;stroke-linecap:round}.filterHouseWarn .filterAlert{fill:#ff8a3d;stroke:#ffe0c4;stroke-width:2;filter:drop-shadow(0 0 5px #ff8a3daa)}.filterHouseWarn .filterAlertText{fill:#241308;font:900 14px sans-serif;pointer-events:none}.bypassCtl{text-decoration:none!important}.bypassCtl .bypassIconPath{fill:none;stroke:#61788d;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;transition:stroke .2s}.bypassCtl.active .bypassIconPath{stroke:#63d8f2;filter:drop-shadow(0 0 6px #63d8f2)}.bypassCtl.clickable:hover .bypassIconPath{stroke:#eafaff}`;root.appendChild(style)}
-};
-class VentilationFlowCardEditor extends HTMLElement{set hass(h){this._hass=h;this.render()}setConfig(c){this._config={title:"Ventilation",height:720,provider:c?.provider||"genvex_connect",...c};this.render()}_fire(next){this._config=next;this.dispatchEvent(new CustomEvent("config-changed",{detail:{config:next},bubbles:true,composed:true}))}render(){if(!this.shadowRoot)this.attachShadow({mode:"open"});const c=this._config||{},danfoss=c.provider==="danfoss_air",selected=c.ventilation_entity||c.genvex_entity||"",providerName=danfoss?"Danfoss Air":"Genvex Connect";this.shadowRoot.innerHTML=`<style>:host{display:block;padding:8px 0}.grid,.field{display:grid;gap:10px}.field{gap:5px}label{font-weight:600}select,input{width:100%;box-sizing:border-box;padding:10px}.hint{font-size:12px;color:var(--secondary-text-color)}.meta{display:flex;justify-content:space-between;padding:8px 10px;border-radius:8px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:12px}</style><div class="grid"><div class="meta"><span>${providerName}</span><span>Card v${CARD_VERSION}</span></div><div class="field"><label>Integration / provider</label><select data-provider><option value="genvex_connect" ${!danfoss?"selected":""}>Genvex Connect</option><option value="danfoss_air" ${danfoss?"selected":""}>Danfoss Air (experimental)</option></select></div><div class="field"><label>${danfoss?"Danfoss Air entity (optional)":"Genvex-anlæg"}</label><ha-entity-picker data-entity value="${selected}" allow-custom-entity></ha-entity-picker><div class="hint">${danfoss?"Danfoss entities findes automatisk.":"Vælg én entity fra Genvex-anlægget."}</div></div>${danfoss?"":`<div class="field"><label>Filterinterval (dage)</label><input data-key="filter_interval_days" type="number" min="-1" step="1" value="${c.filter_interval_days??c.filter_days??-1}"><div class="hint">Brug -1 eller lad feltet være tomt for at anvende intervallet fra Genvex Connect. En positiv værdi overstyrer integrationen.</div></div>`}<div class="field"><label>Titel</label><input data-key="title" value="${c.title||""}"></div><div class="field"><label>Højde (px)</label><input data-key="height" type="number" value="${c.height||720}"></div></div>`;const picker=this.shadowRoot.querySelector("[data-entity]");if(picker)picker.hass=this._hass;this.shadowRoot.querySelector("[data-provider]")?.addEventListener("change",e=>this._fire({...c,provider:e.target.value,ventilation_entity:""}));this.shadowRoot.querySelectorAll("[data-key]").forEach(el=>el.addEventListener("change",e=>{const key=e.target.dataset.key,value=e.target.type==="number"?(e.target.value===""?-1:Number(e.target.value)):e.target.value,next={...this._config,[key]:value};if(key==="filter_interval_days")next.filter_days=value;this._fire(next)}));picker?.addEventListener("value-changed",e=>{const next={...this._config,ventilation_entity:e.detail.value};if(!danfoss)next.genvex_entity=e.detail.value;this._fire(next)})}}
-if(!customElements.get("ventilation-flow-card-editor"))customElements.define("ventilation-flow-card-editor",VentilationFlowCardEditor);Card.getConfigElement=()=>document.createElement("ventilation-flow-card-editor");const entry=(window.customCards||[]).find(x=>x.type==="genvex-flow-card");if(entry){entry.name="Ventilation Flow Card";entry.description="Animated heat-recovery ventilation card for Genvex Connect and Danfoss Air"}console.info("%c VENTILATION FLOW CARD %c "+CARD_VERSION,"background:#078ee6;color:white;padding:3px","background:#333;color:white;padding:3px");
+const CARD_VERSION=__CARD_VERSION__;
+
+export class VentilationFlowCard extends HTMLElement {
+  setConfig(config) {
+    this.config={title:"Ventilation",height:720,aspect_ratio:"16/10",grid_options:{columns:12,rows:8,min_columns:3,min_rows:4},...config};
+    if(this.config.fan)fanModel({config:this.config.fan,entity:this.config.fan.entity});
+    if(this.config.debug_bypass && !["open","closed"].includes(this.config.debug_bypass))throw new Error("debug_bypass must be open or closed");
+    this.provider=createProvider(this);
+    this.loadRegistry();
+    if(!this.shadowRoot) {
+      this.attachShadow({mode:"open"});
+      this.ui={boostSettings:false,humiditySettings:false,drift:false,filterDetail:false,filterConfirm:false,mobileControls:false,error:""};
+      this.view=new CardView(this.shadowRoot,{action:(...args)=>this.action(...args),change:(...args)=>this.change(...args),preview:value=>this.view.preview(value)});
+    }
+    this.render();
+  }
+  set hass(hass) {
+    this._hass=hass;
+    this.loadRegistry();
+    this.render();
+  }
+  loadRegistry() {
+    const key=this.config?.ventilation_entity||this.config?.genvex_entity||"auto";
+    if(!this._hass?.callWS || !this.config || this._registryKey===key)return;
+    this._registryKey=key;
+    this._registryRequest=(this._registryRequest||0)+1;
+    const request=this._registryRequest;
+    this._hass.callWS({type:"config/entity_registry/list"}).then(registry=>{if(request!==this._registryRequest)return;this._registry=registry||[];this.render();}).catch(error=>{if(request!==this._registryRequest)return;this._registry=[];console.warn("Ventilation Flow Card: entity registry unavailable",error);this.render();});
+  }
+  connectedCallback() { this._renderSignature=null;this.render(); }
+  disconnectedCallback() { this.motion?.disconnect();this.motion=null;this._renderSignature=null; }
+  getCardSize() { return Math.max(5,Math.ceil((+this.config?.height||720)/50)); }
+  static getStubConfig() { return {type:"custom:genvex-flow-card",title:"Ventilation",height:720,provider:"genvex_connect",grid_options:{columns:12,rows:8,min_columns:3,min_rows:4}}; }
+  static getConfigElement() { const editor=document.createElement("ventilation-flow-card-editor");editor.version=CARD_VERSION;return editor; }
+  render() {
+    if(!this.config || !this.view)return;
+    const model=this.provider.model(CARD_VERSION);
+    // Handlers always access the latest model, including after skipped updates.
+    this.model=model;
+    const signature=JSON.stringify([this.config,model,this.ui]);
+    if(signature===this._renderSignature)return;
+    this.view.render(model,this.config,this.ui);
+    this._renderSignature=signature;
+    if(this.isConnected) {
+      this.motion??=new AnimationController(this.shadowRoot);
+      this.motion.update(model.fan);
+    }
+  }
+  async run(command, onSuccess, label) {
+    if(this._pending || !command)return;
+    this._pending=true;this.ui.error="";
+    if(this.config.debug_boost)this.ui.lastAction=label||"settings";
+    try { await command();onSuccess?.();if(this.config.debug_boost)this.ui.lastResult="OK"; }
+    catch(error) { this.ui.error=error?.message||String(error);if(this.config.debug_boost)this.ui.lastResult=this.ui.error; }
+    finally { this._pending=false;this.render(); }
+  }
+  action(name,value) {
+    const toggles={boostSettings:"boostSettings",humiditySettings:"humiditySettings",drift:"drift",filterDetail:"filterDetail",mobileControls:"mobileControls"};
+    if(toggles[name]) { const key=toggles[name];this.ui[key]=!this.ui[key];this.render();return; }
+    if(name==="filterHouse"){this.ui.filterDetail=true;this.ui.mobileControls=true;this.render();return;}
+    if(name==="filterConfirm"||name==="filterCancel"){this.ui.filterConfirm=name==="filterConfirm";this.render();return;}
+    const m=this.model;
+    const commands={fan:()=>m.fan.writable&&m.fan.setValue(value),boost:()=>m.boost.available&&m.boost.controllable&&m.boost.toggle(),
+      bypass:()=>m.bypass.available&&m.bypass.controllable&&m.bypass.toggle(),off:()=>m.fan.offAvailable&&m.fan.turnOff(),auto:()=>m.fan.autoAvailable&&m.fan.setAuto(),
+      filterReset:()=>m.filter.resetAvailable&&m.filter.reset()};
+    if(commands[name])this.run(commands[name],name==="filterReset"?()=>{this.ui.filterConfirm=false;}:undefined,name);
+  }
+  change(name,value,entity) {
+    const m=this.model;
+    if(name==="fan")return this.run(()=>m.fan.writable&&m.fan.setValue(value));
+    const fields=name==="boostField"?[m.boost.speed,m.boost.duration]:name==="humidityField"?Object.values(m.humidityControl.fields):[];
+    if(fields.some(field=>field.entity===entity&&field.writable))return this.run(()=>name==="boostField"?m.boost.setValue(entity,value):m.humidityControl.setValue(entity,value));
+  }
+}
+
+class VersionedEditor extends VentilationFlowCardEditor { constructor(){super();this.version=CARD_VERSION;} }
+if(!customElements.get("ventilation-flow-card-editor"))customElements.define("ventilation-flow-card-editor",VersionedEditor);
+if(!customElements.get("genvex-flow-card-editor"))customElements.define("genvex-flow-card-editor",class extends VersionedEditor {});
+if(!customElements.get("genvex-flow-card"))customElements.define("genvex-flow-card",VentilationFlowCard);
+window.customCards??=[];
+if(!window.customCards.some(entry=>entry.type==="genvex-flow-card"))window.customCards.push({type:"genvex-flow-card",name:"Ventilation Flow Card",description:"Animated heat-recovery ventilation visualization with provider capabilities",preview:true});
+console.info("%c VENTILATION FLOW CARD %c "+CARD_VERSION,"background:#078ee6;color:white;padding:3px","background:#333;color:white;padding:3px");

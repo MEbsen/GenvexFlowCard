@@ -1,30 +1,52 @@
+import { fanModel, finite } from "../fan-model.js";
+import { buildModel, binary, measurement, field } from "../ventilation-model.js";
+
 export class VentilationProviderAdapter {
-  constructor(card) { this.card = card; }
-  get hass() { return this.card._hass; }
-  get registry() { return this.card._registry || []; }
-  findByFriendlyName(names, domain) {
+  constructor(context) { this.context = context; }
+  get hass() { return this.context._hass; }
+  get config() { return this.context.config || {}; }
+  get registry() { return this.context._registry || []; }
+  get id() { return this.definition?.id || "generic"; }
+  get label() { return this.definition?.name || "Ventilation"; }
+  get experimental() { return this.definition?.experimental || false; }
+  selectedDeviceId() {
+    const selected = this.config.ventilation_entity || this.config.genvex_entity;
+    if (selected) return this.registry.find(x => x.entity_id === selected)?.device_id || null;
+    return this.config.ventilation_device || this.config.genvex_device || null;
+  }
+  candidates(domain) {
+    const selected = this.config.ventilation_entity || this.config.genvex_entity;
+    const device = this.selectedDeviceId();
+    if (selected && !device) return [];
+    return Object.entries(this.hass?.states || {}).filter(([id]) => (!domain || id.startsWith(domain + ".")) && (!device || this.registry.some(x => x.entity_id === id && x.device_id === device)));
+  }
+  discover(key, names, domain, exact) {
+    const candidates = this.candidates(domain);
+    const metadata = candidates.filter(([id]) => this.registry.some(r => r.entity_id === id && r.platform === this.id && (r.translation_key === key || String(r.unique_id || "").toLowerCase().endsWith("_" + key) || id.endsWith("_" + key.replace(/_enable$/, "")))));
+    if (metadata.length) return metadata.length === 1 ? metadata[0][0] : null;
     const wanted = names.map(x => x.toLowerCase());
-    for (const [id, state] of Object.entries(this.hass?.states || {})) {
-      if (domain && !id.startsWith(domain + ".")) continue;
-      const name = String(state.attributes?.friendly_name || "").toLowerCase();
-      if (wanted.some(x => name === x || name.includes(x))) return id;
-    }
-    return null;
+    const matches = candidates.filter(([id,state]) => id === exact || wanted.some(name => String(state.attributes?.friendly_name || "").toLowerCase().includes(name)));
+    return matches.length === 1 ? matches[0][0] : null;
   }
-  resolve() { return null; }
-  normalizeFanLevel(entityId) {
-    const value = Number(this.hass?.states?.[entityId]?.state);
-    return Number.isFinite(value) ? Math.max(0, Math.min(4, Math.round(value))) : 0;
+  resolve(key) { return this.config.entities?.[key] || null; }
+  numeric(entity) { return measurement(this.hass?.states || {}, entity).value; }
+  callService(...args) { return this.hass?.callService(...args); }
+  known(entity) { const state=this.hass?.states?.[entity];return Boolean(state) && state.state != null && !["unknown","unavailable", ""].includes(String(state.state)); }
+  toggle(entity) {
+    const status = binary(this.hass?.states || {}, entity);
+    if (!status.available || !entity?.startsWith("switch.")) return;
+    return this.callService("switch", status.value ? "turn_off" : "turn_on", {entity_id:entity});
   }
-  get id() { return "generic"; }
-  get label() { return "Ventilation"; }
-  get experimental() { return false; }
-
-  numeric(entityId) {
-    const value = Number(this.hass?.states?.[entityId]?.state);
-    return Number.isFinite(value) ? value : NaN;
+  setField(entity, raw) {
+    const model=field(this.hass?.states || {},entity), domain=entity?.split(".")[0];
+    if (!model.writable) return;
+    if(domain === "select") { if(!model.options.includes(String(raw))) return;return this.callService("select","select_option",{entity_id:entity,option:String(raw)}); }
+    if(!finite(raw)) return;
+    const min=model.min ?? -Infinity,max=model.max ?? Infinity;
+    const origin=Number.isFinite(min)?min:0;
+    const value=Math.max(min,Math.min(max,Number((origin+Math.round((Number(raw)-origin)/model.step)*model.step).toFixed(8))));
+    return this.callService(domain,"set_value",{entity_id:entity,value});
   }
-
   entityMap() {
     return {
       temp_outside:this.resolve("temp_outside","sensor"), temp_supply:this.resolve("temp_supply","sensor"),
@@ -45,30 +67,29 @@ export class VentilationProviderAdapter {
     };
   }
 
-  fanModel(entities) {
-    const value = this.numeric(entities.fan_speed);
-    const level = Number.isFinite(value) ? Math.max(0, Math.min(4, Math.round(value))) : 0;
-    const supplyRpm = this.numeric(entities.fan_rpm_supply), extractRpm = this.numeric(entities.fan_rpm_extract);
-    return {
-      controlMode:"steps", controlEntity:entities.fan_speed, displayEntity:entities.fan_speed,
-      value:level, displayValue:String(level), displayUnit:"trin", normalizedPercent:level*25, legacyLevel:level,
-      min:0, max:4, step:1, options:["0","1","2","3","4"], supplyRpm, extractRpm,
-      running:[supplyRpm,extractRpm].some(rpm=>Number.isFinite(rpm)&&rpm>0)||level>0,
-      setValue:value=>this.hass.callService("select","select_option",{entity_id:entities.fan_speed,option:String(value)})
-    };
+  mappedEntities() {
+    const entities=this.entityMap(),legacy={outside_temperature:"temp_outside",supply_temperature:"temp_supply",extract_temperature:"temp_extract",exhaust_temperature:"temp_exhaust",humidity:"humidity",efficiency:"efficiency",fan_level:"fan_speed",boost:"boost_enable",bypass:"bypass_active",filter_days_left:"filter_days_left",summer_mode:"summer_mode",defrost_active:"defrost_active",reheat_active:"reheat_active"};
+    for(const [configKey,key] of Object.entries(legacy)) if(this.config[configKey]) entities[key]=this.config[configKey];
+    for(const [key,value] of Object.entries(this.config.entities || {})) entities[key]=value;
+    return entities;
   }
-
-  model(cardVersion="") {
-    const entities=this.entityMap(),fan=this.fanModel(entities);
-    const humidityEntities=[entities.humidity_low,entities.humidity_low_step,entities.humidity_high_step,entities.humidity_max_time];
-    return {
-      provider:{id:this.id,name:this.label,experimental:this.experimental}, card:{version:cardVersion}, entities, fan,
-      boost:{entity:entities.boost_enable,speedEntity:entities.boost_speed,durationEntity:entities.boost_duration,setNumber:(entity,value)=>this.hass.callService("number","set_value",{entity_id:entity,value:Number(value)})},
-      bypass:{entity:entities.bypass_active,controllable:Boolean(entities.bypass_active?.startsWith("switch.")),toggle:async()=>{const state=String(this.hass?.states?.[entities.bypass_active]?.state||"").toLowerCase();return this.hass.callService("switch",state==="on"?"turn_off":"turn_on",{entity_id:entities.bypass_active})}},
-      filter:{daysLeftEntity:entities.filter_days_left,daysEntity:entities.filter_days,daysSettingEntity:entities.filter_days_setting,monthsSettingEntity:entities.filter_months_setting,remainingPercentEntity:entities.filter_remaining,resetEntity:entities.filter_reset},
-      humidityControl:{available:humidityEntities.some(Boolean),lowEntity:entities.humidity_low,lowStepEntity:entities.humidity_low_step,highStepEntity:entities.humidity_high_step,maxTimeEntity:entities.humidity_max_time,setNumber:(entity,value)=>this.hass.callService("number","set_value",{entity_id:entity,value:Number(value)}),setOption:(entity,option)=>this.hass.callService("select","select_option",{entity_id:entity,option})},
-      operating:{summerEntity:entities.summer_mode,defrostEntity:entities.defrost_active,reheatEntity:entities.reheat_active},
-      capabilities:{fanControl:Boolean(fan.controlEntity),fanRpm:[fan.supplyRpm,fan.extractRpm].some(Number.isFinite),boost:Boolean(entities.boost_enable),boostSettings:Boolean(entities.boost_speed||entities.boost_duration),bypass:Boolean(entities.bypass_active),bypassControl:Boolean(entities.bypass_active?.startsWith("switch.")),filter:Boolean(entities.filter_days_left||entities.filter_days||entities.filter_remaining),humidityControl:humidityEntities.some(Boolean)}
-    };
+  fanModel(entities) {
+    const entity=this.config.fan?.entity || entities.fan_control || entities.fan_speed;
+    const runningEntity=this.config.fan?.running_entity;
+    const runningState=runningEntity ? binary(this.hass?.states || {},runningEntity).value : undefined;
+    const model=fanModel({entity,state:this.hass?.states?.[entity],config:this.config.fan,callService:(...args)=>this.callService(...args),runningState});
+    const rpm={supply:measurement(this.hass?.states||{},entities.fan_rpm_supply),extract:measurement(this.hass?.states||{},entities.fan_rpm_extract)};
+    return {...model,rpm,supplyRpm:rpm.supply.value,extractRpm:rpm.extract.value};
+  }
+  model(version="") {
+    const states=this.hass?.states || {},entities=this.mappedEntities(),fan=this.fanModel(entities);
+    const controllable=entity=>Boolean(entity?.startsWith("switch."));
+    const definition=this.definition;
+    return buildModel({states,entities,config:this.config,fan,provider:{id:definition?.id||this.id,name:definition?.name||this.label,experimental:definition?.experimental??this.experimental},version,actions:{
+      boost:{controllable:controllable(entities.boost_enable),toggle:()=>this.toggle(entities.boost_enable),setValue:(entity,value)=>this.setField(entity,value)},
+      bypass:{controllable:controllable(entities.bypass_active),toggle:()=>this.toggle(entities.bypass_active)},
+      filter:{resetSupported:Boolean(entities.filter_reset?.startsWith("button.")),resetAvailable:entities.filter_reset?.startsWith("button.") && this.known(entities.filter_reset),reset:()=>this.known(entities.filter_reset) && entities.filter_reset?.startsWith("button.") && this.callService("button","press",{entity_id:entities.filter_reset})},
+      setField:(entity,value)=>this.setField(entity,value)
+    }});
   }
 }

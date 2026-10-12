@@ -1,3 +1,4 @@
+import { binary } from "../ventilation-model.js";
 import { VentilationProviderAdapter } from "./base.js";
 
 export class DanfossAirAdapter extends VentilationProviderAdapter {
@@ -5,6 +6,8 @@ export class DanfossAirAdapter extends VentilationProviderAdapter {
   get label() { return "Danfoss Air"; }
   get experimental() { return true; }
   resolve(key, domain) {
+    const explicit = this.config?.entities?.[key];
+    if (explicit) return explicit;
     const map = {
       temp_outside:["Danfoss Air Outdoor Temperature"],
       temp_supply:["Danfoss Air Supply Temperature"],
@@ -35,26 +38,8 @@ export class DanfossAirAdapter extends VentilationProviderAdapter {
       supply_fan_rpm:"sensor.danfoss_air_supply_fan_speed",
       exhaust_fan_rpm:"sensor.danfoss_air_exhaust_fan_speed"
     };
-    const id=exact[key];
-    if(id&&(!domain||id.startsWith(domain+"."))&&this.hass?.states?.[id]) return id;
-    return this.findByFriendlyName(map[key] || [], domain);
+    return this.discover(key, map[key] || [], domain, exact[key]);
   }
-  normalizeFanLevel(entityId) {
-    const percent = Number(this.hass?.states?.[entityId]?.state);
-    if (!Number.isFinite(percent) || percent <= 0) return 0;
-    return Math.max(1, Math.min(4, Math.ceil(percent / 25)));
-  }
-  fanPercentage(entityId) {
-    const state=this.hass?.states?.[entityId];
-    const pct=Number(state?.attributes?.percentage);
-    if(Number.isFinite(pct)) return Math.max(0,Math.min(100,pct));
-    const step=Number(this.hass?.states?.[this.resolve("fan_speed","sensor")]?.state);
-    return Number.isFinite(step)?Math.max(0,Math.min(100,step)):0;
-  }
-  setFanPercentage(entityId,percentage) {
-    return this.hass.callService("fan","set_percentage",{entity_id:entityId,percentage:Number(percentage)});
-  }
-  turnFanOff(entityId) { return this.hass.callService("fan","turn_off",{entity_id:entityId}); }
 
   entityMap() {
     const entities=super.entityMap();
@@ -64,18 +49,15 @@ export class DanfossAirAdapter extends VentilationProviderAdapter {
   }
 
   fanModel(entities) {
-    const controlEntity=entities.fan_control,percentage=this.fanPercentage(controlEntity),
-      supplyRpm=this.numeric(entities.fan_rpm_supply),extractRpm=this.numeric(entities.fan_rpm_extract),
-      state=String(this.hass?.states?.[controlEntity]?.state||"").toLowerCase(),running=Boolean(controlEntity)&&!["off","unavailable","unknown",""] .includes(state);
-    const modeEntity=entities.operation_mode,boostEntity=entities.boost_enable;
-    return {
-      controlMode:"percentage",controlEntity,displayEntity:entities.fan_speed,value:percentage,
-      displayValue:String(Math.round(percentage)),displayUnit:"%",normalizedPercent:percentage,
-      legacyLevel:this.normalizeFanLevel(entities.fan_speed),min:0,max:100,step:10,supplyRpm,extractRpm,running,
-      setValue:value=>Number(value)<=0?this.turnFanOff(controlEntity):this.setFanPercentage(controlEntity,value),
-      turnOff:async()=>{if(boostEntity&&["on","true","active","1"].includes(String(this.hass?.states?.[boostEntity]?.state||"").toLowerCase()))await this.hass.callService("switch","turn_off",{entity_id:boostEntity});return this.turnFanOff(controlEntity)},
-      setAuto:async()=>{const options=this.hass?.states?.[modeEntity]?.attributes?.options||[],option=options.find(value=>/auto/i.test(String(value)));if(option)return this.hass.callService("select","select_option",{entity_id:modeEntity,option});throw new Error(`AUTO option not found: ${options.join(", ")}`)},
-      autoAvailable:Boolean(modeEntity)
+    const fan=super.fanModel(entities),modeEntity=entities.operation_mode;
+    const options=this.hass?.states?.[modeEntity]?.attributes?.options || [];
+    const auto=this.config.auto_option ? options.find(value=>value===this.config.auto_option) : options.find(value=>/^auto(?:matic)?(?:\s|$)/i.test(String(value)));
+    const offEntity=fan.displayEntity?.startsWith("fan.")?fan.displayEntity:entities.fan_control;
+    const offSupported=Boolean(offEntity?.startsWith("fan.")),offStatus=binary(this.hass?.states||{},offEntity);
+    return {...fan,offSupported,offAvailable:offSupported&&offStatus.available,autoSupported:Boolean(modeEntity),autoAvailable:this.known(modeEntity)&&Boolean(auto),
+      setAuto:()=>this.known(modeEntity)&&auto&&this.callService("select","select_option",{entity_id:modeEntity,option:auto}),
+      turnOff:offSupported?async()=>{if(!offStatus.available)return;const boost=binary(this.hass?.states||{},entities.boost_enable);if(boost.available&&boost.value)await this.toggle(entities.boost_enable);return this.callService("fan","turn_off",{entity_id:offEntity})}:null
     };
   }
+
 }
