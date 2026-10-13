@@ -43,6 +43,42 @@ try {
   await page.evaluate(()=>setState("switch.bypass","off"));
   assert.equal(await root.locator(".dots").count(),4);
   assert.equal(await page.evaluate(()=>rotorAnimation===rotor.getAnimations()[0]),true);
+  // Identical blades, and native circular controls with finger-sized targets.
+  assert.equal(await root.locator(".fanRotor .blade").count(),4);
+  assert.equal(await root.locator(".fanRotor .blade").evaluateAll(blades=>new Set(blades.map(blade=>blade.getAttribute("d"))).size),1);
+  assert.deepEqual(await root.locator(".fanRotor .blade").evaluateAll(blades=>blades.map(blade=>blade.getAttribute("transform"))),[0,90,180,270].map(angle=>`rotate(${angle} 365 318)`));
+  await root.evaluate(card=>card.style.width="360px");
+  const bypassButton=root.locator(".sceneBypass"),boostButton=root.locator(".sceneBoost");
+  for(const button of [bypassButton,boostButton]) {
+    const box=await button.boundingBox();
+    assert.ok(box.width>=44&&box.height>=44);
+    assert.equal(await button.evaluate(el=>getComputedStyle(el).borderRadius),"50%");
+  }
+  const bypassBox=await bypassButton.boundingBox(),boostBox=await boostButton.boundingBox();
+  assert.ok(bypassBox.y+bypassBox.height<=boostBox.y,"Mobile targets must not overlap");
+  for(const width of [320,480,1200]) {
+    await root.evaluate((card,width)=>card.style.width=`${width}px`,width);
+    const bypass=await bypassButton.boundingBox(),boost=await boostButton.boundingBox();
+    assert.ok(bypass.width>=44&&bypass.height>=44&&boost.width>=44&&boost.height>=44);
+    assert.ok(bypass.y+bypass.height<=boost.y);
+    assert.ok(await boostButton.evaluate(button=>{
+      const badge=button.getRootNode().querySelector(".boostCore"),matrix=badge.getScreenCTM();
+      const center=new DOMPoint(365,318).matrixTransform(matrix),box=button.getBoundingClientRect();
+      return Math.abs(center.x-(box.x+box.width/2))<1&&Math.abs(center.y-(box.y+box.height/2))<1;
+    }),"Boost target must stay centered on the SVG fan");
+  }
+  await root.evaluate(card=>card.style.width="360px");
+  await bypassButton.click({position:{x:4,y:22}});
+  await page.waitForFunction(()=>calls.length===1);
+  assert.deepEqual(await page.evaluate(()=>calls.pop()),["switch","turn_on",{entity_id:"switch.bypass"}]);
+  await boostButton.focus();await boostButton.press("Enter");
+  await page.waitForFunction(()=>calls.length===1);
+  assert.deepEqual(await page.evaluate(()=>calls.pop()),["switch","turn_on",{entity_id:"switch.boost"}]);
+  await page.evaluate(()=>setState("switch.bypass","unavailable"));
+  assert.equal(await bypassButton.isDisabled(),true);
+  await page.evaluate(()=>setState("switch.bypass","off"));
+  await root.screenshot({path:"dist/card-mobile-preview.png"});
+  await root.evaluate(card=>card.style.width="1200px");
   // Verify actual service dispatch through the incremental view.
   await root.locator('[data-change="fan"]').evaluate(input=>{input.value="0.65";input.dispatchEvent(new Event("change",{bubbles:true}));});
   await page.waitForFunction(()=>calls.length===1);
@@ -117,7 +153,7 @@ try {
   assert.equal(await root.locator(".bigLevel").textContent(),"2");
   // Failed services are surfaced in the UI rather than unhandled promises.
   await page.evaluate(()=>{hass={...hass,callService:async()=>{throw new Error("Test service unavailable");}};card.hass=hass;});
-  await root.locator('button[data-action="boost"]').click();
+  await root.locator('.ui button[data-action="boost"]').click();
   await root.locator('[role="alert"]').waitFor();
   assert.equal(await root.locator('[role="alert"]').textContent(),"Test service unavailable");
   assert.deepEqual(errors,[]);
@@ -145,8 +181,40 @@ try {
   });
   assert.equal(await root.locator(".bigLevel").textContent(),"30");
   assert.equal(await page.evaluate(()=>renderCount),0);
+  await page.evaluate(()=>{
+    window.calls=[];hass={...hass,callService:async(...args)=>calls.push(args)};card.hass=hass;
+  });
+  await root.locator('[data-action="off"]').click();
+  await page.waitForFunction(()=>calls.length===1);
+  assert.deepEqual(await page.evaluate(()=>calls.pop()),["fan","turn_off",{entity_id:"fan.danfoss_air_ventilation"}]);
   await page.evaluate(()=>setState("fan.danfoss_air_ventilation","off"));
   assert.equal(await page.evaluate(()=>card.model.fan.running),false);
+  assert.equal(await root.locator(".bigLevel").textContent(),"0");
+  assert.equal(await root.locator(".fanOff").textContent(),"START");
+  assert.equal(await page.evaluate(()=>card.shadowRoot.querySelector(".fanRotor").getAnimations()[0].playState),"paused");
+  await page.evaluate(()=>{
+    window.calls=[];hass={...hass,callService:async(...args)=>calls.push(args)};card.hass=hass;
+  });
+  await root.locator('[data-action="start"]').click();
+  await page.waitForFunction(()=>calls.length===1);
+  assert.deepEqual(await page.evaluate(()=>calls.pop()),["fan","turn_on",{entity_id:"fan.danfoss_air_ventilation",percentage:30}]);
+  // Only confirmed HA state changes the button and restarts motion.
+  assert.equal(await root.locator(".fanOff").textContent(),"START");
+  await page.evaluate(()=>setState("fan.danfoss_air_ventilation","on"));
+  assert.equal(await root.locator(".bigLevel").textContent(),"30");
+  assert.equal(await root.locator(".fanOff").textContent(),"SLUK");
+  assert.equal(await page.evaluate(()=>card.shadowRoot.querySelector(".fanRotor").getAnimations()[0].playState),"running");
+  await page.evaluate(()=>{
+    card._registry=[...card._registry,{entity_id:"select.renamed_mode",device_id:"danfoss",platform:"danfoss_air_ccm",translation_key:"run_mode"}];
+    hass={...hass,states:{...hass.states,"select.renamed_mode":{state:"Manual",attributes:{options:["Demand","Program","Manual"]}}}};
+    card.hass=hass;
+  });
+  assert.equal(await root.locator(".fanAuto").isDisabled(),false);
+  await root.locator(".fanAuto").click();
+  await page.waitForFunction(()=>calls.length===1);
+  assert.deepEqual(await page.evaluate(()=>calls.pop()),["select","select_option",{entity_id:"select.renamed_mode",option:"Demand"}]);
+  await page.evaluate(()=>setState("select.renamed_mode","Demand"));
+  assert.equal(await root.locator(".fanAuto.on").count(),1);
   // Disconnect cleans up animation timelines and reconnect creates them again.
   await page.evaluate(()=>card.remove());
   assert.equal(await page.evaluate(()=>rotor.getAnimations().length),0);

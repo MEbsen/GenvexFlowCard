@@ -16,8 +16,8 @@ export function controlsView(model, ui) {
     const steps=fan.controlMode === "steps" ? `<div class="steps" style="grid-template-columns:repeat(${Math.min(5,fan.options.length)},1fr)">${fan.options.map(value=>`<button type="button" class="step ${value===fan.displayValue?"on":""}" data-key="speed:${esc(value)}" data-action="fan" data-value="${esc(value)}" ${disabled(fan.writable)}>${esc(value)}</button>`).join("")}</div>`
       : fan.controlEntity ? `<div class="percentageFan"><input aria-label="Ventilationshastighed" data-key="fan-slider" data-change="fan" type="range" min="${fan.min}" max="${fan.max}" step="${fan.step}" value="${fan.value}" ${disabled(fan.writable)}></div>` : "";
     sections.push(`<section data-key="fan-controls"><h3>VENTILATION</h3><div class="level"><span class="miniFan">✤</span><span class="bigLevel" data-fan-value>${esc(fan.displayValue)}</span><span class="fanUnit">${esc(fan.displayUnit)}</span></div>${steps}
-      ${fan.autoSupported?`<button class="boost fanAuto" data-action="auto" ${disabled(fan.autoAvailable)}>AUTO</button>`:""}
-      ${fan.offSupported?`<button class="boost fanOff ${fan.running===false?"on":""}" data-action="off" ${disabled(fan.offAvailable)}>SLUK</button>`:""}</section>`);
+      ${fan.autoSupported?`<button class="boost fanAuto ${fan.autoActive?"on":""}" data-action="auto" title="${esc(fan.autoReason||"Automatisk ventilation")}" ${disabled(fan.autoAvailable)}>AUTO</button>${fan.autoReason?`<div class="autoHint">${esc(fan.autoReason)}</div>`:""}`:""}
+      ${fan.offSupported?`<button class="boost fanOff ${fan.running===false?"on":""}" data-action="${fan.startAvailable?"start":"off"}" ${disabled(fan.startAvailable||fan.offAvailable)}>${fan.startAvailable?"START":"SLUK"}</button>`:""}</section>`);
   }
   if(boost.supported || model.capabilities.boostSettings) sections.push(`<section data-key="boost-controls"><div class="boostSettingsRow">
     ${boost.supported?`<button class="boost ${boost.value===true?"on":""}" data-action="boost" ${disabled(boost.available&&boost.controllable)}>${boost.available?boost.value?"BOOST AKTIV":"BOOST":"BOOST —"}</button>`:""}

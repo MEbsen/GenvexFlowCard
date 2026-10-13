@@ -142,7 +142,7 @@ The historical card type `custom:genvex-flow-card` is intentionally retained for
 | `genvex_entity` | string | legacy / optional | Existing Genvex configurations remain supported. |
 | `entities` | object | optional | Common entity mappings; explicit mappings override discovery and legacy mappings. |
 | `fan` | object | optional | Fan entity, mode, range, step, attribute and optional option/off/running mappings. |
-| `auto_option` | string | optional | Explicit AUTO option for Danfoss when its label is not `auto` / `automatic`. |
+| `auto_option` | string | optional | Exact Danfoss AUTO option; overrides recognition of `auto`, `automatic`, `automatisk` and `Demand`. |
 | `debug_boost` | boolean | `false` | Show the resolved Boost entity/state and last action result. |
 | `debug_bypass` | string | optional | `open` or `closed` simulates the displayed bypass route only. |
 | `filter_interval_days` | number | `-1` | `-1` or empty uses the integration's days/months interval. A positive value overrides it. |
@@ -197,6 +197,26 @@ On CTS400 systems running Genvex Connect 1.5.4 or newer, the card exposes the av
 Danfoss Air support includes automatic entity discovery for the supported Home Assistant entities, percentage fan control, AUTO/OFF operation, Boost, writable bypass, remaining-filter percentage and supply/exhaust RPM when those entities are exposed.
 
 The exact feature set can vary with the unit and Home Assistant integration.
+
+When the Danfoss fan reports `off`, the card displays 0 and pauses motion even if
+a separate speed sensor retains its old value. SLUK becomes START and resumes
+the last confirmed percentage. This speed is remembered during the card session;
+after a page reload, the card uses the fan's retained percentage or lets Home
+Assistant choose its startup speed if none is available.
+
+AUTO discovery accepts both `operation_mode` and `run_mode` registry metadata
+for the Danfoss Air and Danfoss Air CCM platforms. It recognizes a single
+`auto`, `automatic`, `automatisk`, or `Demand` option and sends the original
+option value. Ambiguous entities or options require explicit configuration:
+
+```yaml
+entities:
+  operation_mode: select.your_danfoss_run_mode
+auto_option: Demand
+```
+
+`Demand` selects demand control; `Program` is a separate scheduled mode and is
+never selected implicitly by AUTO.
 
 ## Troubleshooting
 

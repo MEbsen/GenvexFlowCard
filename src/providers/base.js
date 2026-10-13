@@ -9,6 +9,7 @@ export class VentilationProviderAdapter {
   get id() { return this.definition?.id || "generic"; }
   get label() { return this.definition?.name || "Ventilation"; }
   get experimental() { return this.definition?.experimental || false; }
+  get discoveryPlatforms() { return [this.id]; }
   registryIndex() {
     const registry=this.context._registry;
     if (!this._registryIndex || this._indexedRegistry !== registry) {
@@ -48,12 +49,12 @@ export class VentilationProviderAdapter {
     }
     return this._candidateGroups.get(domain) || [];
   }
-  discover(key, names, domain, exact) {
+  discover(key, names, domain, exact, keys=[key]) {
     const candidates = this.candidates(domain);
     const index=this.registryIndex();
     const metadata = candidates.filter(([id]) => {
       const r=index.get(id);
-      return r && r.platform === this.id && (r.translation_key === key || String(r.unique_id || "").toLowerCase().endsWith("_" + key) || id.endsWith("_" + key.replace(/_enable$/, "")));
+      return r && this.discoveryPlatforms.includes(r.platform) && keys.some(key=>r.translation_key === key || String(r.unique_id || "").toLowerCase().endsWith("_" + key) || id.endsWith("_" + key.replace(/_enable$/, "")));
     });
     if (metadata.length) return metadata.length === 1 ? metadata[0][0] : null;
     const wanted = names.map(x => x.toLowerCase());

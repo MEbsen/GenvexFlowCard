@@ -67,7 +67,7 @@ export class VentilationFlowCard extends HTMLElement {
     if(name==="filterConfirm"||name==="filterCancel"){this.ui.filterConfirm=name==="filterConfirm";this.render();return;}
     const m=this.model;
     const commands={fan:()=>m.fan.writable&&m.fan.setValue(value),boost:()=>m.boost.available&&m.boost.controllable&&m.boost.toggle(),
-      bypass:()=>m.bypass.available&&m.bypass.controllable&&m.bypass.toggle(),off:()=>m.fan.offAvailable&&m.fan.turnOff(),auto:()=>m.fan.autoAvailable&&m.fan.setAuto(),
+      bypass:()=>m.bypass.available&&m.bypass.controllable&&m.bypass.toggle(),off:()=>m.fan.offAvailable&&m.fan.turnOff(),start:()=>m.fan.startAvailable&&m.fan.turnOn(),auto:()=>m.fan.autoAvailable&&m.fan.setAuto(),
       filterReset:()=>m.filter.resetAvailable&&m.filter.reset()};
     if(commands[name])this.run(commands[name],name==="filterReset"?()=>{this.ui.filterConfirm=false;}:undefined,name);
   }

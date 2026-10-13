@@ -102,4 +102,37 @@ assert.equal(largeProvider.model().fan.displayEntity,"fan.second");
 assert.equal(registryReads,size*2);
 large._registry=[];
 assert.equal(largeProvider.model().fan.supported,false);
-console.log("Provider contract, capability rendering, discovery and large-registry regression tests OK");
+// Stop wins over a stale speed sensor; resume remembers the confirmed fan speed.
+const resumeContext={config:{provider:"danfoss_air",fan:{entity:"sensor.step",min:0,max:5}},_registry:[],_hass:{states:{
+  [ids.fan]:state("on",{percentage:60}),"sensor.step":state("3"),
+  "select.renamed_run":state("Manual",{options:["Demand","Program","Manual"]})
+},callService:(...args)=>{calls.push(args);return Promise.resolve();}}};
+resumeContext._registry=[{entity_id:ids.fan,platform:"danfoss_air",translation_key:"fan_control"},{entity_id:"select.renamed_run",platform:"danfoss_air_ccm",translation_key:"run_mode"}];
+const resumeProvider=createProvider(resumeContext);
+model=resumeProvider.model();assert.equal(model.fan.running,true);assert.equal(model.fan.autoAvailable,true);
+await model.fan.setAuto();assert.deepEqual(calls.pop(),["select","select_option",{entity_id:"select.renamed_run",option:"Demand"}]);
+await model.fan.turnOff();assert.deepEqual(calls.pop(),["fan","turn_off",{entity_id:ids.fan}]);
+resumeContext._hass.states[ids.fan]=state("off",{percentage:0});
+model=resumeProvider.model();assert.equal(model.fan.displayValue,"0");assert.equal(model.fan.normalizedPercent,0);assert.equal(model.fan.running,false);
+assert.ok(controlsView(model,ui).includes('data-action="start"'));
+await model.fan.turnOn();assert.deepEqual(calls.pop(),["fan","turn_on",{entity_id:ids.fan,percentage:60}]);
+resumeContext._hass.states[ids.fan]=state("on",{percentage:60});
+model=resumeProvider.model();assert.equal(model.fan.displayValue,"3");assert.equal(model.fan.startAvailable,false);
+// A reload can resume from retained percentage; unknown speed delegates to HA.
+resumeContext._hass.states[ids.fan]=state("off",{percentage:45});
+await createProvider({...resumeContext,_danfossResumeSpeeds:undefined}).model().fan.turnOn();assert.deepEqual(calls.pop(),["fan","turn_on",{entity_id:ids.fan,percentage:45}]);
+resumeContext._hass.states[ids.fan]=state("off",{});
+await createProvider({...resumeContext,_danfossResumeSpeeds:undefined}).model().fan.turnOn();assert.deepEqual(calls.pop(),["fan","turn_on",{entity_id:ids.fan}]);
+resumeContext._hass.states[ids.fan]=state("unavailable",{percentage:60});
+model=resumeProvider.model();assert.equal(model.fan.running,null);assert.equal(model.fan.startAvailable,false);await model.fan.turnOn();assert.equal(calls.length,0);
+// Ambiguous automatic options and entities require an explicit configuration.
+resumeContext._hass.states["select.renamed_run"].attributes.options=["Demand","Automatic"];
+assert.equal(resumeProvider.model().fan.autoAvailable,false);
+resumeContext.config.auto_option="Demand";
+assert.equal(resumeProvider.model().fan.autoAvailable,true);
+resumeContext._hass.states["select.other_mode"]=state("Manual",{options:["Auto","Manual"]});
+resumeContext._registry=[...resumeContext._registry,{entity_id:"select.other_mode",platform:"danfoss_air",translation_key:"operation_mode"}];
+assert.equal(resumeProvider.model().fan.autoAvailable,false);
+resumeContext.config.entities={operation_mode:"select.renamed_run"};
+assert.equal(resumeProvider.model().fan.autoAvailable,true);
+console.log("Provider contract, discovery, large-registry, Danfoss stop/start and AUTO tests OK");
