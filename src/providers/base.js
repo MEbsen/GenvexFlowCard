@@ -9,20 +9,52 @@ export class VentilationProviderAdapter {
   get id() { return this.definition?.id || "generic"; }
   get label() { return this.definition?.name || "Ventilation"; }
   get experimental() { return this.definition?.experimental || false; }
+  registryIndex() {
+    const registry=this.context._registry;
+    if (!this._registryIndex || this._indexedRegistry !== registry) {
+      this._indexedRegistry=registry;
+      this._registryIndex=new Map((registry || []).map(entry=>[entry.entity_id,entry]));
+    }
+    return this._registryIndex;
+  }
   selectedDeviceId() {
     const selected = this.config.ventilation_entity || this.config.genvex_entity;
-    if (selected) return this.registry.find(x => x.entity_id === selected)?.device_id || null;
+    if (selected) return this.registryIndex().get(selected)?.device_id || null;
     return this.config.ventilation_device || this.config.genvex_device || null;
   }
   candidates(domain) {
     const selected = this.config.ventilation_entity || this.config.genvex_entity;
     const device = this.selectedDeviceId();
     if (selected && !device) return [];
-    return Object.entries(this.hass?.states || {}).filter(([id]) => (!domain || id.startsWith(domain + ".")) && (!device || this.registry.some(x => x.entity_id === id && x.device_id === device)));
+    const index=this.registryIndex();
+    if (this._candidateStates !== this.hass?.states || this._candidateDevice !== device) {
+      this._candidateStates=this.hass?.states;
+      this._candidateDevice=device;
+      this._candidateGroups=null;
+    }
+    // Build the device/domain groups once per model, not once per field.
+    if (!this._candidateGroups) {
+      this._candidateGroups=new Map();
+      const all=[];
+      this._candidateGroups.set(undefined,all);
+      for (const entry of Object.entries(this.hass?.states || {})) {
+        const [id]=entry;
+        if (device && index.get(id)?.device_id !== device) continue;
+        all.push(entry);
+        const type=id.split(".")[0];
+        if (!this._candidateGroups.has(type)) this._candidateGroups.set(type,[]);
+        this._candidateGroups.get(type).push(entry);
+      }
+    }
+    return this._candidateGroups.get(domain) || [];
   }
   discover(key, names, domain, exact) {
     const candidates = this.candidates(domain);
-    const metadata = candidates.filter(([id]) => this.registry.some(r => r.entity_id === id && r.platform === this.id && (r.translation_key === key || String(r.unique_id || "").toLowerCase().endsWith("_" + key) || id.endsWith("_" + key.replace(/_enable$/, "")))));
+    const index=this.registryIndex();
+    const metadata = candidates.filter(([id]) => {
+      const r=index.get(id);
+      return r && r.platform === this.id && (r.translation_key === key || String(r.unique_id || "").toLowerCase().endsWith("_" + key) || id.endsWith("_" + key.replace(/_enable$/, "")));
+    });
     if (metadata.length) return metadata.length === 1 ? metadata[0][0] : null;
     const wanted = names.map(x => x.toLowerCase());
     const matches = candidates.filter(([id,state]) => id === exact || wanted.some(name => String(state.attributes?.friendly_name || "").toLowerCase().includes(name)));
@@ -82,6 +114,7 @@ export class VentilationProviderAdapter {
     return {...model,rpm,supplyRpm:rpm.supply.value,extractRpm:rpm.extract.value};
   }
   model(version="") {
+    this._candidateGroups=null;
     const states=this.hass?.states || {},entities=this.mappedEntities(),fan=this.fanModel(entities);
     const controllable=entity=>Boolean(entity?.startsWith("switch."));
     const definition=this.definition;

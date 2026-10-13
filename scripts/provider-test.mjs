@@ -73,4 +73,33 @@ registerProvider({id:"test_provider",name:"Test Provider",Adapter:VentilationPro
 context.config.provider="test_provider";assert.equal(createProvider(context).model().provider.name,"Test Provider");
 assert.ok(providerDefinitions().some(x=>x.id==="test_provider"));
 assert.throws(()=>registerProvider({id:"test_provider",name:"Duplicate",Adapter:VentilationProviderAdapter}));
-console.log("Provider contract, capability rendering and discovery tests OK");
+// A large HA registry must be indexed, never scanned for every candidate/field.
+// Count registry reads rather than using a machine-dependent timing threshold.
+const large={config:{provider:"danfoss_air"},_registry:[],_hass:{states:{}}};
+let registryReads=0;
+const size=6000;
+for(let i=0;i<size;i++) {
+  const id=`sensor.unrelated_${i}`;
+  large._hass.states[id]=state("1",{friendly_name:`Unrelated ${i}`});
+  large._registry.push({get entity_id(){assert.ok(++registryReads<size*3,"Discovery rescans the HA registry");return id;},device_id:"other",platform:"other"});
+}
+large._hass.states[ids.fan]=state("on",{friendly_name:"Danfoss Air Ventilation",percentage:30});
+large._registry.push({entity_id:ids.fan,device_id:"danfoss",platform:"danfoss_air"});
+const largeProvider=createProvider(large);
+assert.equal(largeProvider.model().fan.displayEntity,ids.fan);
+assert.equal(registryReads,size);
+large.config.ventilation_entity=ids.fan;
+for(let i=0;i<50;i++) {
+  large._hass.states={...large._hass.states,[ids.fan]:state("on",{percentage:i})};
+  assert.ok(Math.abs(largeProvider.model().fan.normalizedPercent-i)<1e-10);
+}
+assert.equal(registryReads,size,"Unchanged registry must reuse its index");
+// New registry data and changed device selection must take effect immediately.
+large._registry=[...large._registry,{entity_id:"fan.second",device_id:"second",platform:"danfoss_air",translation_key:"fan_control"}];
+large._hass.states={...large._hass.states,"fan.second":state("on",{percentage:80})};
+large.config.ventilation_entity="fan.second";
+assert.equal(largeProvider.model().fan.displayEntity,"fan.second");
+assert.equal(registryReads,size*2);
+large._registry=[];
+assert.equal(largeProvider.model().fan.supported,false);
+console.log("Provider contract, capability rendering, discovery and large-registry regression tests OK");

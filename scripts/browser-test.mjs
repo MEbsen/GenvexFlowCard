@@ -121,6 +121,32 @@ try {
   await root.locator('[role="alert"]').waitFor();
   assert.equal(await root.locator('[role="alert"]').textContent(),"Test service unavailable");
   assert.deepEqual(errors,[]);
+  // Danfoss discovery with a full HA registry must leave the browser responsive.
+  await page.evaluate(async()=>{
+    const states={},registry=[];
+    for(let i=0;i<6000;i++) {
+      const id=`sensor.unrelated_${i}`;
+      states[id]={state:"1",attributes:{friendly_name:`Unrelated ${i}`}};
+      registry.push({entity_id:id,platform:"other",device_id:"other"});
+    }
+    const id="fan.danfoss_air_ventilation";
+    states[id]={state:"on",attributes:{friendly_name:"Danfoss Air Ventilation",percentage:30}};
+    registry.push({entity_id:id,platform:"danfoss_air",device_id:"danfoss"});
+    hass={states,callWS:async()=>registry,callService:async()=>{}};
+    card.hass=hass;
+    card.setConfig({provider:"danfoss_air",ventilation_entity:id});
+    await Promise.resolve();
+    window.renderCount=0;
+    for(let i=0;i<100;i++) {
+      hass={...hass,states:{...hass.states,"sensor.unrelated_0":{state:String(i),attributes:{}}}};
+      card.hass=hass;
+    }
+    await new Promise(resolve=>requestAnimationFrame(resolve));
+  });
+  assert.equal(await root.locator(".bigLevel").textContent(),"30");
+  assert.equal(await page.evaluate(()=>renderCount),0);
+  await page.evaluate(()=>setState("fan.danfoss_air_ventilation","off"));
+  assert.equal(await page.evaluate(()=>card.model.fan.running),false);
   // Disconnect cleans up animation timelines and reconnect creates them again.
   await page.evaluate(()=>card.remove());
   assert.equal(await page.evaluate(()=>rotor.getAnimations().length),0);
