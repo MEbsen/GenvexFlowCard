@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { chromium } from "playwright";
+import { testResponsive } from "./responsive-test.mjs";
 
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHANNEL?{channel:process.env.PLAYWRIGHT_CHANNEL}:{})});
 try {
@@ -28,6 +29,7 @@ try {
   assert.equal(await root.locator(".filterSummary").textContent(),"FILTER 30% tilbage");
   assert.equal(await root.locator('[data-action="auto"]').count(),0);
   assert.equal(await root.locator(".driftAccordion").textContent(),"↪ BypassLukket❄ Defrost—");
+  await testResponsive(page,root);
   await page.evaluate(async()=>{window.rotor=card.shadowRoot.querySelector(".fanRotor");window.rotorAnimation=rotor.getAnimations()[0];await rotorAnimation.ready;rotorAnimation.currentTime=1700;window.flow=card.shadowRoot.querySelector(".dots");window.flowAnimation=flow.getAnimations()[0];window.renderCount=0;});
   // Same data and unrelated entities must not touch the DOM or animation.
   await page.evaluate(()=>{card.hass={...hass};setState("sensor.unrelated","42");});
